@@ -40,7 +40,7 @@ export const createRequestHandler = function (Private, es, indexPatterns, $sanit
         try {
           let multiquerydsltext = vis.params.multiquerydsl;
           multiquerydsltext = multiquerydsltext.replace(/"_DASHBOARD_CONTEXT_"/g, JSON.stringify(context));
-          multiquerydsltext = multiquerydsltext.replace(/"_TIME_RANGE_\[([^\]]*)\]"/g, `{"range":{"$1":{"gte": "${timeRange.time.from}", "lte": "${timeRange.time.to}"}}}`);
+          multiquerydsltext = multiquerydsltext.replace(/"_TIME_RANGE_\[([^\]]*)\]"/g, `{"range":{"$1":{"gte": "${timeRange.from}", "lte": "${timeRange.to}"}}}`);
           multiquerydsl = JSON.parse(multiquerydsltext);
         } catch (error) {
           return display_error('Error (See Console)', 'MultiqueryDSL Parse Error', error);
