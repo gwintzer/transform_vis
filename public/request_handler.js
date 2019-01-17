@@ -102,7 +102,7 @@ export const createRequestHandler = function (Private, es, indexPatterns, $sanit
         const fillTempate = () => {
           const formula = vis.params.formula;
           try {
-            return ({ html: Mustache.render(formula, bindme) });
+            return ({ html: Mustache.render(formula, bindme), after_render: bindme.meta.after_render });
           } catch (error) {
             return display_error('Error (See Console)', 'Mustache Template Error', error);
           }
