@@ -1,26 +1,25 @@
-import './transform_vis.less';
-
-import { uiModules } from 'ui/modules';
-import { VisController } from './vis_controller';
-import { CATEGORY } from 'ui/vis/vis_category';
-import { VisFactoryProvider } from 'ui/vis/vis_factory';
 import { VisTypesRegistryProvider } from 'ui/registry/vis_types';
-import { VisSchemasProvider } from 'ui/vis/editors/default/schemas';
-import { createRequestHandler } from './request_handler';
+import { VisFactoryProvider } from 'ui/vis/vis_factory';
+import { DefaultEditorSize } from 'ui/vis/editor_size';
+import { Status } from 'ui/vis/update_status';
 
+import { RequestHandlerProvider } from './request_handler';
+import { VisualizationProvider } from './visualisation';
+
+// Editor-specific code
+import './editor_controller';
 import optionsTemplate from './options_template.html';
-import 'plugins/transform_vis/editor_controller';
 
-function TransformVisProvider(Private, es, indexPatterns, $sanitize) {
+VisTypesRegistryProvider.register((Private) => {
   const VisFactory = Private(VisFactoryProvider);
+  const requestHandler = Private(RequestHandlerProvider);
+  const visualization = Private(VisualizationProvider);
 
   return VisFactory.createBaseVisualization({
     name: 'transform',
     title: 'Transform',
     description: 'Transfom query results to custom HTML using template language',
-    icon: 'fa-exchange',
-    category: CATEGORY.OTHER,
-    visualization: VisController,
+    icon: 'editorCodeBlock',
     visConfig: {
       defaults: {
         meta: `({
@@ -46,13 +45,17 @@ function TransformVisProvider(Private, es, indexPatterns, $sanitize) {
     },
     editorConfig: {
       optionsTemplate: optionsTemplate,
+      enableAutoApply: false,
+      defaultSize: DefaultEditorSize.MEDIUM,
     },
-    requestHandler: createRequestHandler(Private, es, indexPatterns, $sanitize),
+    visualization: visualization,
+    requiresUpdateStatus: [Status.DATA, Status.RESIZE],
+    requestHandler: requestHandler,
     responseHandler: 'none',
     options: {
       showIndexSelection: false,
+      showQueryBar: true,
+      showFilterBar: true,
     },
   });
-}
-
-VisTypesRegistryProvider.register(TransformVisProvider);
+});
