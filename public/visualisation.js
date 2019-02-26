@@ -8,12 +8,13 @@ export function VisualizationProvider(Private, transformVisOptions, serviceSetti
       this.container = document.createElement('div');
       this.container.className = 'output-vis';
       this.el.appendChild(this.container);
+      this.root = this.container.createShadowRoot();
     }
 
     render(visData, status) {
       return new Promise(resolve => {
-        this.container.innerHTML = visData.html;
-        if (typeof visData.after_render === "function") { visData.after_render(); }
+        this.root.innerHTML = visData.html;
+        if (typeof visData.after_render === "function") { visData.after_render.bind(this)(); }
         resolve('done rendering');
       });
     }
