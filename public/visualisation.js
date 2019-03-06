@@ -14,7 +14,13 @@ export function VisualizationProvider(Private, transformVisOptions, serviceSetti
     render(visData, status) {
       return new Promise(resolve => {
         this.root.innerHTML = visData.html;
-        if (typeof visData.after_render === "function") { visData.after_render.bind(this)(); }
+        if (typeof visData.after_render === "function") {
+          try {
+            visData.after_render.bind(this)();
+          } catch (err) {
+            console.error(`Error executing after_render for '${this.vis.title}':`, err)
+          }
+        }
         resolve('done rendering');
       });
     }

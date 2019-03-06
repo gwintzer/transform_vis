@@ -15,7 +15,7 @@ export function RequestHandlerProvider (Private, es) {
 
     const display_error = (displayMessage, consoleMessage, error) => {
       if (consoleMessage !== undefined && error !== undefined) {
-        console.log(consoleMessage, error);
+        console.error(consoleMessage, error);
       }
       return ({ html: `<div style="text-align: center;"><i>${displayMessage}</i></div>` });
     };
