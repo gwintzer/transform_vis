@@ -7,13 +7,13 @@ BUILD_VERSION="1"
 SKIP_INSTALL_DEPS="false"
 
 # get the params
-while getopts b:k:s option
+while getopts b:k:u:s option
 do
     case "${option}"
     in
         b) BUILD_VERSION=${OPTARG};;
         k) KIBANA_VERSION=${OPTARG};;
-        k) USER=${OPTARG};;
+        u) USER=${OPTARG};;
         s) SKIP_INSTALL_DEPS="true"
     esac
 done
