@@ -18,6 +18,11 @@ bin/kibana-plugin install https://github.com/PhaedrusTheGreek/transform_vis/rele
 
 
 ![Transform Vis](https://raw.githubusercontent.com/PhaedrusTheGreek/transform_vis/master/transform_vis.png)
+## Samples with plotly.js:
+![Transform Vis](https://github.com/guanghaofan/transform_vis/blob/master/doc/boxplot.png)
+![Transform Vis](https://github.com/guanghaofan/transform_vis/blob/master/doc/scatter.png)
+![Transform Vis](https://github.com/guanghaofan/transform_vis/blob/master/doc/spc.png)
+
 
 ## Variable Binding
 
