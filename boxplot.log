@@ -1,0 +1,136 @@
+eg1: grouped box plot
+
+DSL:
+
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "Operation": {
+              "value": "FT"
+            }
+          }
+        },
+        {
+          "terms": {
+            "LotNumber": [
+              "HG50212",
+              "HG50215",
+              "HG00057E"
+            ]
+          }
+        },
+        {
+          "term": {
+            "Type": {
+              "value": "PinMeasure"
+            }
+          }
+        },
+        {
+          "term": {
+            "Pin": {
+              "value": "S_VDDCR_SOC"
+            }
+          }
+        }
+      ],
+      "filter": {
+        "terms": {
+          "context": [
+            "Sidd_VddCrSoc_V1",
+            "Sidd_VddCrSoc_V2",
+            "Sidd_VddCrSoc_V3"
+          ]
+        }
+      }
+    }
+  },
+  "size": 10000,
+  "_source": ["context", "LotNumber", "value"]
+}
+
+JS:
+({
+    /*
+    * please never try edit the js code
+     ****************************************************************
+     *  author: guanghao                                            *
+     *  description: box plot chart                                 *
+     *  the x is defined as the context name, that is the series    *
+     *  the y is defined as the test value, that is the group       *
+     *  limitation: max data size is 10000                          *
+     ****************************************************************
+     * how to edit the Query DSL?
+     * 1) modify the 'Operation' field if needed
+     * 2) modify the 'LotNumber' field to your target lot
+     * 3) modify the 'Type' field if needed
+     * 4) modify the 'Pin' field if needed
+     * 5) filter the test flow context
+     */
+    
+    after_render: function() {
+        var all_data = response.hits.hits;
+        /****/
+        var y = [];
+        var x = [];
+        
+        var lots = [];
+        let no = 0;
+        
+        all_data.forEach(function(hit){
+            var lotNumber = hit._source.LotNumber;
+            var curr_lot = lots.find(function(lot){
+               return lot.lotNumber === lotNumber;
+            });
+            
+            if (curr_lot == null) {
+                no = lots.length;
+                curr_lot = {lotNumber: lotNumber,  x: [],  y: [] };
+                lots[no] = curr_lot;
+            }
+            var y = curr_lot.y;
+            var x = curr_lot.x;
+            no = y.length;
+            y[no] = hit._source.value;
+            x[no] = hit._source.context;
+        });
+        
+        console.log(lots);
+        
+        var traces = [];
+        no = 0;
+        lots.forEach(function(lot){
+            var trace = {
+              y: lot.y,
+              x: lot.x,
+              name: lot.lotNumber,
+              marker: {color: d3.scale.category10[no]},
+              type: 'box'
+            };
+            traces[no] = trace;
+            no ++;
+            
+        });
+        var layout = {
+          title: 'Sidd Distribution',
+          yaxis: {
+            title: 'normalized moisture',
+            zeroline: false
+          },
+          boxmode: 'group'
+        };
+        
+        Plotly.newPlot('myDiv', traces, layout, {showSendToCloud: true});
+        
+    }
+})
+
+Template:
+
+
+<div id="myDiv" style="color:blue; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    
+</div>

@@ -1,0 +1,930 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "Operation": {
+              "value": "FT"
+            }
+          }
+        },
+        {
+          "terms": {
+            "LotNumber": [
+              "HG50212",
+              "HG50215"
+            ]
+          }
+        },
+        {
+          "term": {
+            "Type": {
+              "value": "PinMeasure"
+            }
+          }
+        },
+        {
+          "term": {
+            "Pin": {
+              "value": "S_VDDCR_SOC"
+            }
+          }
+        }
+      ],
+      "filter": {
+        "terms": {
+          "context": [
+            "Sidd_VddCrSoc_V1",
+            "Sidd_VddCrSoc_V3"
+          ]
+        }
+      }
+    }
+  },
+  "size": 0,
+  "aggs": {
+    "LotNumber": {
+      "terms": {
+        "field": "LotNumber",
+        "size": 2
+      },
+      "aggs": {
+        "UnitId": {
+          "terms": {
+            "field": "UnitId",
+            "size": 5000
+          },
+          "aggs": {
+            "TestName": {
+              "terms": {
+                "field": "context"
+              },
+              "aggs": {
+                "Avg": {
+                  "avg": {
+                    "field": "value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Helper":{
+      "terms": {
+        "field": "context",
+        "size": 10
+      },
+      "aggs": {
+        "max": {
+          "max": {
+            "field": "value"
+          }
+        },
+        "min":{
+          "min": {
+            "field": "value"
+          }
+          
+        }
+      }
+      
+    }
+
+    
+  }
+}
+
+
+({
+   after_render: function() {
+       var innerContainer = document.getElementById('viz');
+       var symbolSelector = innerContainer.querySelector('.symbolData');
+       var colorSelector = innerContainer.querySelector('.colorsData');
+       var sizeSelector = innerContainer.querySelector('.sizeData');
+        
+       function add_option (){
+            var listofSymbos = ["diamond-open", "circle-open", "diamond", "circle-dot", "circle", "square-open", "square", "triangle-up-dot", "triangle-up-open-dot", "triangle-left-dot", "pentagon-dot", "hexagon-open",  "star-triangle-up-open-dot","hourglass-open","star-diamond-open-dot"];
+            
+            for (var i = 0; i < listofSymbos.length;  i++) {
+                var currentOption = document.createElement('option');
+                currentOption.text = listofSymbos[i];
+               symbolSelector.appendChild(currentOption);
+            }
+            function updatesymbol(){
+              console.log(symbolSelector.value);
+            }
+            symbolSelector.addEventListener('change', updatesymbol, false); 
+       }
+       
+        add_option();
+    
+    
+    // define the data
+    var all_data = response.aggregations.LotNumber.buckets;
+    var lot_data_0 = response.aggregations.LotNumber.buckets[0].UnitId.buckets;
+    var lot_data_1 = response.aggregations.LotNumber.buckets[1].UnitId.buckets;
+    
+    var a = lot_data_0;
+    var b = lot_data_1;
+    
+    var minX = 0;
+    var minY = 0;
+    var maxX = 0;
+    var maxY = 0;
+    
+    
+    minX = response.aggregations.Helper.buckets[0].min.value;
+    maxX = response.aggregations.Helper.buckets[0].max.value;
+    
+    minY = response.aggregations.Helper.buckets[1].min.value;
+    maxY = response.aggregations.Helper.buckets[1].max.value;
+   /*
+    console.log("minX = " + minX);
+    console.log("maxX = " + maxX);
+   
+    console.log("minY = " + minY);
+    console.log("maxY = " + maxY);  
+    */
+   
+
+    let lotno = 0;
+    var traces = [];
+    
+    all_data.forEach(function(lot){
+        var data = lot.UnitId.buckets.filter(function (d){
+            return d.TestName.buckets.length === 2;
+        });
+        var lotNumber = lot.key;
+        
+        var x = [];
+        var y =[];
+        var unitid = [];
+        
+        let i = 0;
+        data.forEach(function(unit){
+            x[i] = unit.TestName.buckets[0].Avg.value;
+            y[i] = unit.TestName.buckets[1].Avg.value;
+            unitid[i] = unit.key;
+            i++;
+        });
+        var trace = {
+          x: x,
+          y: y,
+          mode: 'markers',
+          type: 'scatter',
+          name: lotNumber,
+          text: unitid,
+          marker: {size: 12, symbol: symbolSelector[lotno].innerText}
+        };
+        traces[lotno] = trace;
+        lotno ++;
+        
+    })
+    
+    var layout = { 
+          hovermode:'closest',
+          xaxis: {
+            title: response.aggregations.Helper.buckets[0].key
+          },
+          yaxis: {
+            title: response.aggregations.Helper.buckets[1].key
+          },
+          
+          title: ''
+        };
+
+    Plotly.newPlot('viz', traces, layout, {showSendToCloud: true});
+    
+    innerContainer.on('plotly_click', function(data){
+      //alert('You clicked this Plotly chart!');
+      var pn='',
+          tn='',
+          colors=[];
+      for(var i=0; i < data.points.length; i++){
+        //pn = data.points[i].pointNumber;
+        tn = data.points[i].curveNumber;
+        //colors = data.points[i].data.marker.color;
+        //console.log("i = " + i);
+      }
+      console.log(symbolSelector);
+      
+      //colors = '#C54C82';
+        
+      var update = {'marker':{color: colorSelector.value.split(":")[1], size:sizeSelector.value, symbol: symbolSelector.value}};
+      Plotly.restyle('viz', update, [tn]);
+    });
+    innerContainer.on('plotly_restyle', function(data){
+      //console.log(data);
+    });
+  },
+  
+ count_hits: function() {
+  return this.response.hits.hits.length;
+ },
+ count_aggs: function() {
+     var a  = response.aggregations.UnitId.buckets;
+     return a[0].TestName.buckets[0].Avg.value;
+ },
+  all_aggs: function() {
+     var a = this.response.aggregations.UnitId.buckets;
+     return a;
+ },
+ debug: function() {
+  return JSON.stringify(this, null, ' ');
+ } 
+})
+
+
+<div id="viz" style="color:black; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    <div class="control-row" style = "float: left">
+        Country: <select class="symbolData">
+        </select>
+    </div>
+    <div class="control-row" style = "float: right">
+        Color: <select class="colorsData">
+            <option>Red:#FF0000</option>
+            <option>Green:#008000</option>
+            <option>Yellow:#FFFF00</option>
+            <option>Pink:#FFC0CB</option>
+            <option>Brown:#A52A2A</option>
+            <option>Blue:#0000FF</option>
+            <option>Grey:#808080</option>
+            <option>Orange:#FFA500</option>
+            <option>SkyBlue:#87CEEB</option>
+        </select>
+    </div>
+    <div class="control-row" style = "float: auto">
+        Size: <select class="sizeData">
+            <option>10</option>
+            <option>12</option>
+            <option>14</option>
+            <option>16</option>
+            <option>8</option>
+             
+        </select>
+    </div>
+</div>
+
+
+<!--This imports the library so that D3 can be used-->
+{{ meta.add_option }}
+
+2: boxplot
+
+{
+  "query": {
+    "bool": {
+      "must": [
+        "_DASHBOARD_CONTEXT_",
+        {
+          "term": {
+            "Type": {
+              "value": "Search"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "context": {
+      "terms": {
+        "field": "context",
+        "size": 20
+      }
+    }
+  }, 
+  "size": 10000,
+  "_source": [
+    "context",
+    "value",
+    "UnitId",
+    "TestCode",
+    "StartTimeStamp"
+  ]
+}
+
+
+({
+    /*
+    * please never try edit the js code
+     ****************************************************************
+     *  author: guanghao                                            *
+     *  description: box plot chart                                 *
+     *  the x is defined as the context name, that is the series    *
+     *  the y is defined as the test value, that is the group       *
+     *  limitation: max data size is 10000                          *
+     ****************************************************************
+     * how to edit the Query DSL?
+     * 1) modify the 'Operation' field if needed
+     * 2) modify the 'LotNumber' field to your target lot
+     * 3) modify the 'Type' field if needed
+     * 4) modify the 'Pin' field if needed
+     * 5) filter the test flow context
+     */
+    
+    after_render: function() {
+        // config for test code to temperature
+        var AAQFNE = {temp: 20, index: 0};
+        var AANFNE = {temp: 50, index: 1};
+        var AASFNE = {temp: 90, index: 2};
+        var AATFNE = {temp: 100, index: 3};
+        var testCode = { AAQFNE: AAQFNE, AANFNE: AANFNE, AASFNE: AASFNE, AATFNE: AATFNE};
+        var colors = Plotly.d3.scale.category10();
+        
+        //configuration for order, choose the sortMetric and only enabled one
+        var asc = false;
+        var sortMetric = {Min: false, Max: false, Mean: false, StdDev: false, Temperature: true};
+        
+        // configuration what to track, and only enable one metric
+        var tarckMetric = {Min: false, Max: false, Mean: true, StdDev: false};
+    
+        // config for new value
+        var myConfigValue = {gmi_fulltrain_PRBS_3200_Vmin_tck_25MHz_VminSearch_VddCrSoc: 0.3,
+            gmi_fulltrain_PRBS_3200_Vmin_tck_16MHz_VminSearch_VddCrSoc: 0.45
+        };
+        //config ucl
+        var myUCLValue = {gmi_fulltrain_PRBS_3200_Vmin_tck_25MHz_VminSearch_VddCrSoc: 0.7,
+            gmi_fulltrain_PRBS_3200_Vmin_tck_16MHz_VminSearch_VddCrSoc: 0.75
+        };
+        
+        var innerContainer = document.getElementById('myDiv');
+        var all_data = response.hits.hits;
+        if(all_data.length === 0){
+            var alert = document.getElementById('alert');
+            alert.innerHTML += 'Empty Data in this Date Range';
+            return false;
+        }
+
+        var y = [];
+        var x = [];
+        var text = [];
+        
+        var datasets = [];
+        let no = 0;
+        
+        // aggs clk speed
+        var all_context = response.aggregations.context.buckets;
+        var all_clk = [];
+        
+        all_context.forEach(function(bucket){
+            let context = bucket.key;
+            var names = context.split('_');
+            var clkSpeed = names[names.length - 3];
+            if(all_clk.indexOf(clkSpeed) === -1){
+                all_clk[all_clk.length] = clkSpeed;
+            }
+        });
+        //console.log('all_clk:'+ all_clk);
+        all_clk.sort();
+        
+        all_data.forEach(function(hit){
+            var legend = hit._source.TestCode;
+            var context = hit._source.context;
+            
+            var curr_dataset = datasets.find(function(dataSet){
+               return (dataSet.legend === legend && dataSet.context === context);
+            });
+            
+            if (curr_dataset == null) {
+                no = datasets.length;
+                curr_dataset = {legend: legend,  x: [],  y: [] , text: [], context: context};
+                datasets[no] = curr_dataset;
+            }
+            var y = curr_dataset.y;
+            var x = curr_dataset.x;
+            var text = curr_dataset.text;
+            
+            no = y.length;
+            y[no] = hit._source.value;
+            if(y[no] === 0){
+                if(myConfigValue.hasOwnProperty(context)){
+                    y[no] = myConfigValue[context];
+                }
+            }
+            text[no] = hit._source.UnitId;
+            //replace the context here
+            let names = context.split('_');
+            x[no] = names[names.length - 3];
+            x[no] = testCode[legend]['temp'];
+            //x[no] = x[no] + '-' + names[names.length - 3];
+            
+        });
+        
+        // here start to sort trace by user specified param such as mean, max, min, std, median
+        datasets.forEach(function(dataSet){
+            var min = d3.min(dataSet.y, function(d) { return d });
+            var max = d3.max(dataSet.y, function(d) { return d });
+            var mean = d3.mean(dataSet.y, function(d) { return d });
+            var std = d3.deviation(dataSet.y, function(d) { return d });
+            var median = d3.median(dataSet.y, function(d) { return d });
+            dataSet['min'] = min;
+            dataSet['max'] = max;
+            dataSet['mean'] = mean.toFixed(2);
+            dataSet['std'] = std.toFixed(2);
+            dataSet['median'] = median.toFixed(2);
+            //console.log('min: ' + min + ", max: " + max + ", mean: " + mean + ", std: " + std + ", median: " + median);
+            
+        });
+        // context e.g. gmi_fulltrain_PRBS_3200_Vmin_tck_25MHz_VminSearch_VddCrSoc
+        var context = all_data[0]._source.context;
+        
+        let V_Search = context.indexOf('Vmin') === -1 ? 'VmaxSearch': 'VminSearch';
+        let names = context.split('_');
+        let Frequency = names[names.length - 6];
+        let VoltageType = names[names.length - 1];
+        let title = 'V_Search=' + V_Search + ',VoltageType=' + VoltageType + ',Frequency=' + Frequency;
+        
+        //console.log(datasets);
+        var headValues = [];
+        var table_colors = [];
+        headValues[0] = [''];
+        table_colors[0] = '#25FEFD';
+        var traces = [];
+        no = 0;
+        var groupNo = 1;
+        let groupSize = all_clk.length;
+        
+        var layout = {
+          title:{text: title, font: {size: 15}},
+          yaxis: {
+            title: 'value',
+            zeroline: false,
+            hoverformat: '.2f'
+          },
+          //boxmode: 'group'
+        };
+        all_clk.forEach(function(clk){
+            var curr_clk_group = datasets.filter(function(dataSet){
+               return (dataSet.context.indexOf(clk) != -1);
+            });
+            //console.log(clk);
+            //console.log(curr_clk_group);
+            
+            var xt = 'x' + (groupNo);
+            var xaxis = 'xaxis' + groupNo;
+            
+            let start = (groupNo - 1)/ groupSize;
+            let end = groupNo/groupSize - (groupSize ===  1 ? 0 : 1/10);
+            layout[xaxis] = {type: "category", domain:[start, end], title: clk};
+            let showLegend = groupNo === 1 ? true : false;
+            
+            // sort current traces here
+            
+            curr_clk_group.sort(function(a, b){
+                if(sortMetric['Min']) {
+                    return asc ? (a.min > b.min) : (a.min < b.min);
+                }
+                else if(sortMetric['Max']){
+                    return asc ? (a.max > b.max) : (a.max < b.max);
+                }
+                else if(sortMetric['Mean']){
+                    return asc ? (a.mean > b.mean) : (a.mean < b.mean);
+                }
+                else if(sortMetric['StdDev']){
+                    return asc ? (a.std > b.std) : (a.std < b.std);
+                }
+                else if(sortMetric['Temperature']){
+                    return asc ? (testCode[a.legend]['temp'] > testCode[b.legend]['temp']) : (testCode[a.legend]['temp'] < testCode[b.legend]['temp']);
+                }
+            });
+            var track_x = [];
+            var track_y = [];
+            var ucl_y = [];
+            var track_text = [];
+            
+            curr_clk_group.forEach(function(lot){
+                var tempIndex = testCode[lot.legend]['index'];
+                var color = colors(tempIndex);
+                
+                var trace = {
+                    type: 'box',
+                    y: lot.y,
+                    x: lot.x,
+                    xaxis: xt,
+                    text:lot.text,
+                    name: testCode[lot.legend]['temp'],
+                    showlegend: showLegend,
+                    legendgroup: tempIndex,
+                    //name: testCode[lot.legend]['temp'] + '-' + lot.context.split('_')[lot.context.split('_').length - 3],
+                    
+                    marker: {
+                         color: color,
+                        //   outliercolor: 'rgba(219, 64, 82, 0.6)',
+                        //   line: {
+                        //     outliercolor: 'rgba(219, 64, 82, 1.0)',
+                        //     outlierwidth: 2
+                        //   },
+                      },
+                      boxpoints: 'all', //'suspectedoutliers', // all
+                      jitter: 1,
+                      boxmean: 'sd', // true
+                      pointpos: '0'
+                    };
+                    traces[no] = trace;
+                    headValues[no + 1] = clk + '-' + testCode[lot.legend]['temp'];
+                    table_colors[no + 1] = color;
+                    track_text[track_text.length] = testCode[lot.legend]['temp'];
+                    no++;
+                    
+                    ucl_y[ucl_y.length] = myUCLValue[lot.context];
+                    track_x[track_x.length] = testCode[lot.legend]['temp'];
+                    if(tarckMetric['Min']) {
+                        track_y[track_y.length] = lot.min;
+                    }
+                    else if(tarckMetric['Max']){
+                        track_y[track_y.length] = lot.max;
+                    }
+                    else if(tarckMetric['Mean']){
+                        track_y[track_y.length] = lot.mean;
+                    }
+                    else if(tarckMetric['StdDev']){
+                        track_y[track_y.length] = lot.std;
+                    }
+                    else{
+                        track_y[track_y.length] = lot.mean;
+                    }
+            });
+            //add tracking lines here
+            var trace = {
+                    type: 'scatter',
+                    y: track_y,
+                    x: track_x,
+                    xaxis: xt,
+                    //text:lot.text,
+                    name: clk ,
+                    text: track_text,
+                    showlegend: true
+            }
+            traces[datasets.length + groupNo -1 ] = trace;
+            
+            // add the ucl lines
+            var UCL = {
+              type: 'scatter',
+              x: track_x,
+              y: ucl_y,
+              xaxis: xt,
+              mode: 'lines',
+              name: 'UCL-' + clk ,
+              showlegend: true,
+              line: {
+                color: 'red',
+                width: 2,
+                dash: 'dash'
+              }
+            };
+            traces[datasets.length + groupNo -1 + all_clk.length] = UCL;
+            groupNo ++;
+        });
+        
+        Plotly.plot('boxplot', traces,  layout, {showSendToCloud: true});
+        
+        var boxplotDiv = document.getElementById('boxplot');
+        boxplotDiv.on('plotly_legendclick', function(clickData){
+            console.log(clickData.layout);
+            return false;
+        });
+        //console.log(layout);
+        var calcData = boxplotDiv.calcdata;
+        
+        console.log(calcData);
+        
+        // assign the row value
+        var rows = [];
+        
+        
+        var values = [];
+        values[0] = ['Count', 'Min', 'Mean', 'Max', 'StdDev'];
+        
+        no = 0;
+        calcData.forEach(function(data){
+            if(no < datasets.length){
+                var Count = data[0].pts.length;
+                var Min = data[0].min.toFixed(2);
+                var Mean =data[0].mean.toFixed(2);
+                var Max =data[0].med.toFixed(2);
+                var StdDev = data[0].sd.toFixed(2);
+                var boxData = [Count, Min, Mean, Max, StdDev];
+                values[values.length] = boxData;
+            }
+            no ++;
+        });
+        
+        no = 0;
+        for(;no < values[0].length; no ++){
+            let colNo = 0;
+            var row = [];
+            for(;colNo != values.length; colNo ++){
+                row[colNo] = values[colNo][no];
+            }
+            rows[no] = row;
+        }
+        console.log("rows value: ");
+        console.log(rows);
+        
+        /*
+        datasets.forEach(function(data){
+            var Count = 25;
+            var Min = data.min;
+            var Mean =data.mean;
+            var Max =data.max;
+            var StdDev = data.sd;
+            var boxData = [Count, Min, Mean, Max, StdDev];
+            values[values.length] = boxData;
+            
+        });
+        
+        var data = [{
+          type: 'table',
+          header: {
+            values: headValues,
+            align: ["left", "center"],
+            line: {width: 1, color: '#506784'},
+            fill: {color: '#119DFF'},
+            font: {family: "Arial", size: 12, color: "white"}
+          },
+          cells: {
+            values: values,
+            align: ["left", "center"],
+            line: {color: "#506784", width: 1},
+        	 fill: {color: ['#25FEFD', 'white']},
+            font: {family: "Arial", size: 11, color: ["#506784"]} 
+          }
+        }];
+        
+        Plotly.plot('table', data, {}, {showSendToCloud: true});
+        console.log(values);
+        */
+    
+        var tableDiv = document.getElementById('table');
+        
+        
+        var tbl = document.getElementById('dataTable');
+        var tblBody = document.createElement("tbody");
+        var row = document.createElement("tr");
+
+        // header row
+        for(var i = 0 ; i <=  datasets.length; i++){
+            var cell = document.createElement("th");
+            cell.setAttribute("font-size", "19"); 
+            var cellText = document.createTextNode(headValues[i]);
+            cell.appendChild(cellText);
+            row.appendChild(cell);
+        }
+        tblBody.appendChild(row);
+        
+        //value rows
+        rows.forEach(function(data){
+            var row = document.createElement("tr");
+            data.forEach(function(text){
+                var cell = document.createElement("td");
+                var cellText = document.createTextNode(text);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            });
+            tblBody.appendChild(row);
+        });
+        tbl.appendChild(tblBody);
+        // appends <table> into <body>
+        tableDiv.appendChild(tbl);
+    }
+})
+
+
+
+<style type="text/css">
+    table {
+    	background: #f5f5f5;
+    	font-size: 12px;
+    	line-height: 24px;
+    	text-align: middle;
+    }
+    th {
+    	border-left: 1px solid #555;
+    	border-right: 1px solid #777;
+    	border-top: 1px solid #555;
+    	border-bottom: 1px solid #333;
+        font-weight: 510;
+    }
+    td {
+    	border-right: 1px solid #fff;
+    	border-left: 1px solid #e8e8e8;
+    	border-top: 1px solid #fff;
+    	border-bottom: 1px solid #e8e8e8;
+    }
+</style> 
+
+<div id="myDiv" style="color:black; text-align:center; margin:0 auto; position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 12px">
+    <div id = alert></div>
+    <div id = "boxplot" style = "float: top; height: 65%" ></div>
+    <div id = "tableContainer" style = "float: bottom; bottom: 0;width: 80%; margin-top: 25px; margin-left: 25px;margin-bottom: 5px" >
+        <div id = table style = "float bottom;  heigh: 50%">
+            <table id= "dataTable" width="100%"></table>
+        </div>
+        
+    </div>
+</div>
+3:
+spc chart
+
+{
+  "sort": [
+    {
+      "LotEndTime": {
+        "order": "asc"
+      }
+    }
+  ], 
+  "query": {
+       
+    "bool": {
+      "must": [
+        {
+          "terms": {
+            "Operation": [
+              "FT",
+              "FT2"
+            ]
+          }
+        }
+      ],
+      "filter": {
+        "range": {
+          "LotEndTime": {
+             "gte" : "now-50d/d",
+              "lt" :  "now/d"
+          }
+        }
+      }
+    }
+  },
+  "_source": ["LotNumber", "LotEndTime", "kdfFinalYield"],
+  "size" : 500
+}
+
+
+({
+    
+    // This is to install external script/library
+    import_funnelLib_plotly: function() {
+         $.getScript("https://cdn.plot.ly/plotly-latest.min.js", function( data, textStatus, jqxhr ) {
+            console.log("Import Complete");
+        }); 
+    },
+    
+ 
+    after_render: function() {
+        var loLimit = 0.9;
+        
+        var lots = response.hits.hits;
+        var x =[];
+        var y = [];
+        var ucl = [];
+        let i = 0;
+        lots.forEach(function(lot){
+            x[i] = lot._source.LotNumber;
+            y[i] = lot._source.kdfFinalYield;
+            ucl[i] = loLimit;
+            i++;
+        });
+        console.log(x);
+        var Data = {
+          type: 'scatter',
+          x: x,
+          y: y,
+          mode: 'lines+markers',
+          name: 'Data',
+          showlegend: true,
+          hoverinfo: 'all',
+          line: {
+            color: 'green',
+            width: 2
+          },
+          marker: {
+            color: 'green',
+            size: 8,
+            symbol: 'circle'
+          }
+        }
+        
+        var Viol = {
+          type: 'scatter',
+          x: [6,9],
+          y: [-7,8],
+          mode: 'markers',
+          name: 'Violation',
+          showlegend: true,
+          marker: {
+            color: 'rgb(255,65,54)',
+            line: {width: 3},
+            opacity: 0.5,
+            size: 12,
+            symbol: 'circle-open'
+          }
+        }
+        
+        var LCL = {
+          type: 'scatter',
+          x: [0, 10],
+          y: [-5, -5],
+          mode: 'lines',
+          name: 'LCL',
+          showlegend: true,
+          line: {
+            color: 'red',
+            width: 2,
+            dash: 'dash'
+          }
+        }
+        var UCL = {
+          type: 'scatter',
+          x: x,
+          y: ucl,
+          mode: 'lines',
+          name: 'UCL',
+          showlegend: true,
+          line: {
+            color: 'red',
+            width: 2,
+            dash: 'dash'
+          }
+        }
+        
+        var Centre = {
+          type: 'scatter',
+          x: [0.5, 20],
+          y: [0, 0],
+          mode: 'lines',
+          name: 'Centre',
+          showlegend: true,
+          line: {
+            color: 'grey',
+            width: 2
+          }
+        }
+        
+        var histo = {
+          type: 'histogram',
+          orientation: 'h',
+          x: y,
+          y: y,
+          name: 'Distribution',   
+          marker: {
+            color: 'green',
+            line: {
+              color: 'white',
+              width: 1
+            }
+          },
+          xaxis: 'x2',
+          yaxis: 'y'
+        }
+        var data = [Data, UCL, histo]
+        //var data = [Viol,UCL, Centre,histo]
+        
+        // layout
+        var layout = {
+          title: 'Yield SPC Chart',
+          xaxis: {
+            domain: [0, 0.7], // 0 to 70% of width
+            zeroline: false
+          },
+          yaxis: {
+            //range: [0.8,1],
+            zeroline: false
+          },
+          xaxis2: {
+            domain: [0.7, 1] // 70 to 100% of width
+          }
+        }
+        
+        Plotly.plot('myDiv', data,layout, {showSendToCloud: true});
+    },
+    count_hits: function() {
+            return this.response.hits.hits.length;
+    },
+    count_aggs: function() {
+        var a  = response.aggregations.UnitId.buckets;
+        return a[0].TestName.buckets[0].Avg.value;
+    },
+    all_aggs: function() {
+        var a = this.response.aggregations.UnitId.buckets;
+        return a;
+    },
+    debug: function() {
+        return JSON.stringify(this, null, ' ');
+    } 
+})
+
+
+
+<div id="myDiv" style="color:blue; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    
+</div>
+
+
+
+

@@ -1165,3 +1165,1024 @@ template:
 
 </div>
 
+
+// boxplot demo
+{
+    "sort": [
+        {
+          "LotNumber": {
+            "order": "desc"
+          }
+        },
+        {
+          "context": {
+            "order": "asc"
+          }
+        }
+  ],
+   "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "Operation": {
+              "value": "FT"
+            }
+          }
+        },
+        {
+          "terms": {
+            "LotNumber": [
+              "HG50212",
+              "HG50215",
+              "HG00057E"
+            ]
+          }
+        },
+        {
+          "term": {
+            "Type": {
+              "value": "PinMeasure"
+            }
+          }
+        },
+        {
+          "term": {
+            "Pin": {
+              "value": "S_VDDCR_SOC"
+            }
+          }
+        }
+      ],
+      "filter": {
+        "terms": {
+          "context": [
+            "Sidd_VddCrSoc_V1",
+            "Sidd_VddCrSoc_V2",
+            "Sidd_VddCrSoc_V3"
+          ]
+        }
+      }
+    }
+  },
+  "size": 10000,
+  "_source": ["context", "LotNumber", "value"]
+}
+
+
+({
+    /*
+    * please never try edit the js code
+     ****************************************************************
+     *  author: guanghao                                            *
+     *  description: box plot chart                                 *
+     *  the x is defined as the context name, that is the series    *
+     *  the y is defined as the test value, that is the group       *
+     *  limitation: max data size is 10000                          *
+     ****************************************************************
+     * how to edit the Query DSL?
+     * 1) modify the 'Operation' field if needed
+     * 2) modify the 'LotNumber' field to your target lot
+     * 3) modify the 'Type' field if needed
+     * 4) modify the 'Pin' field if needed
+     * 5) filter the test flow context
+     */
+    
+    after_render: function() {
+        var all_data = response.hits.hits;
+        /****/
+        var y = [];
+        var x = [];
+        
+        var lots = [];
+        let no = 0;
+        
+        all_data.forEach(function(hit){
+            var lotNumber = hit._source.LotNumber;
+            var curr_lot = lots.find(function(lot){
+               return lot.lotNumber === lotNumber;
+            });
+            
+            if (curr_lot == null) {
+                no = lots.length;
+                curr_lot = {lotNumber: lotNumber,  x: [],  y: [] };
+                lots[no] = curr_lot;
+            }
+            var y = curr_lot.y;
+            var x = curr_lot.x;
+            no = y.length;
+            y[no] = hit._source.value;
+            x[no] = hit._source.context;
+        });
+        
+        console.log(lots);
+        
+        var traces = [];
+        no = 0;
+        lots.forEach(function(lot){
+            var trace = {
+              y: lot.y,
+              x: lot.x,
+              name: lot.lotNumber,
+              marker: {color: d3.scale.category10[no]},
+              type: 'box'
+            };
+            traces[no] = trace;
+            no ++;
+            
+        });
+        var layout = {
+          title: 'Sidd Distribution',
+          yaxis: {
+            title: 'test value',
+            zeroline: false
+          },
+          boxmode: 'group'
+        };
+        
+        Plotly.newPlot('myDiv', traces, layout);
+        
+    }
+})
+
+
+
+<div id="myDiv" style="color:blue; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    
+</div>
+
+
+spc-chart-demo
+
+{
+  "sort": [
+    {
+      "LotEndTime": {
+        "order": "asc"
+      }
+    }
+  ], 
+  "query": {
+       
+    "bool": {
+      "must": [
+        {
+          "terms": {
+            "Operation": [
+              "FT",
+              "FT2"
+            ]
+          }
+        }
+      ],
+      "filter": {
+        "range": {
+          "LotEndTime": {
+             "gte" : "now-50d/d",
+              "lt" :  "now/d"
+          }
+        }
+      }
+    }
+  },
+  "_source": ["LotNumber", "LotEndTime", "kdfFinalYield"],
+  "size" : 500
+}
+
+
+
+
+({
+    
+    // This is to install external script/library
+    import_funnelLib_plotly: function() {
+         $.getScript("https://cdn.plot.ly/plotly-latest.min.js", function( data, textStatus, jqxhr ) {
+            console.log("Import Complete");
+        }); 
+    },
+    
+ 
+    after_render: function() {
+        var loLimit = 0.9;
+        
+        var lots = response.hits.hits;
+        var x =[];
+        var y = [];
+        var ucl = [];
+        let i = 0;
+        lots.forEach(function(lot){
+            x[i] = lot._source.LotNumber;
+            y[i] = lot._source.kdfFinalYield;
+            ucl[i] = loLimit;
+            i++;
+        });
+        console.log(x);
+        var Data = {
+          type: 'scatter',
+          x: x,
+          y: y,
+          mode: 'lines+markers',
+          name: 'Data',
+          showlegend: true,
+          hoverinfo: 'all',
+          line: {
+            color: 'green',
+            width: 2
+          },
+          marker: {
+            color: 'green',
+            size: 8,
+            symbol: 'circle'
+          }
+        }
+        
+        var Viol = {
+          type: 'scatter',
+          x: [6,9],
+          y: [-7,8],
+          mode: 'markers',
+          name: 'Violation',
+          showlegend: true,
+          marker: {
+            color: 'rgb(255,65,54)',
+            line: {width: 3},
+            opacity: 0.5,
+            size: 12,
+            symbol: 'circle-open'
+          }
+        }
+        
+        var LCL = {
+          type: 'scatter',
+          x: [0, 10],
+          y: [-5, -5],
+          mode: 'lines',
+          name: 'LCL',
+          showlegend: true,
+          line: {
+            color: 'red',
+            width: 2,
+            dash: 'dash'
+          }
+        }
+        var UCL = {
+          type: 'scatter',
+          x: x,
+          y: ucl,
+          mode: 'lines',
+          name: 'UCL',
+          showlegend: true,
+          line: {
+            color: 'red',
+            width: 2,
+            dash: 'dash'
+          }
+        }
+        
+        var Centre = {
+          type: 'scatter',
+          x: [0.5, 20],
+          y: [0, 0],
+          mode: 'lines',
+          name: 'Centre',
+          showlegend: true,
+          line: {
+            color: 'grey',
+            width: 2
+          }
+        }
+        
+        var histo = {
+          type: 'histogram',
+          orientation: 'h',
+          x: y,
+          y: y,
+          name: 'Distribution',   
+          marker: {
+            color: 'green',
+            line: {
+              color: 'white',
+              width: 1
+            }
+          },
+          xaxis: 'x2',
+          yaxis: 'y'
+        }
+        var data = [Data, UCL, histo]
+        //var data = [Viol,UCL, Centre,histo]
+        
+        // layout
+        var layout = {
+          title: 'Yield SPC Chart',
+          xaxis: {
+            domain: [0, 0.7], // 0 to 70% of width
+            zeroline: false
+          },
+          yaxis: {
+            //range: [0.8,1],
+            zeroline: false
+          },
+          xaxis2: {
+            domain: [0.7, 1] // 70 to 100% of width
+          }
+        }
+        
+        Plotly.plot('myDiv', data,layout);
+    },
+    count_hits: function() {
+            return this.response.hits.hits.length;
+    },
+    count_aggs: function() {
+        var a  = response.aggregations.UnitId.buckets;
+        return a[0].TestName.buckets[0].Avg.value;
+    },
+    all_aggs: function() {
+        var a = this.response.aggregations.UnitId.buckets;
+        return a;
+    },
+    debug: function() {
+        return JSON.stringify(this, null, ' ');
+    } 
+})
+
+
+<div id="myDiv" style="color:blue; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    
+</div>
+
+boxplot-raw
+
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "Operation": {
+              "value": "FT"
+            }
+          }
+        },
+        {
+          "terms": {
+            "LotNumber": [
+              "HG50212",
+              "HG50215",
+              "HG00057E"
+            ]
+          }
+        },
+        {
+          "term": {
+            "Type": {
+              "value": "PinMeasure"
+            }
+          }
+        },
+        {
+          "term": {
+            "Pin": {
+              "value": "S_VDDCR_SOC"
+            }
+          }
+        }
+      ],
+      "filter": {
+        "terms": {
+          "context": [
+            "Sidd_VddCrSoc_V1",
+            "Sidd_VddCrSoc_V2",
+            "Sidd_VddCrSoc_V3"
+          ]
+        }
+      }
+    }
+  },
+  "size": 10000,
+  "_source": ["context", "LotNumber", "value"]
+}
+
+
+
+({
+    
+    // This is to install external script/library
+    import_funnelLib_plotly: function() {
+         $.getScript("https://cdn.plot.ly/plotly-latest.min.js", function( data, textStatus, jqxhr ) {
+            console.log("Import Complete");
+        }); 
+    },
+    
+ 
+   after_render: function() {
+       var xData = ['Carmelo<br>Anthony', 'Dwyane<br>Wade',
+      'Deron<br>Williams', 'Brook<br>Lopez',
+      'Damian<br>Lillard', 'David<br>West',
+      'Blake<br>Griffin', 'David<br>Lee',
+      'Demar<br>Derozan'];
+      
+        function getrandom(num , mul) 
+        {
+           var value = [ ]  
+            for(i=0;i<=num;i++)
+           {
+             var rand=Math.random() * mul;
+            value.push(rand);
+            }
+            return value
+        }
+        var yData = [
+           getrandom(30 ,10),
+            getrandom(30, 20),
+           getrandom(30, 25),
+           getrandom(30, 40),
+            getrandom(30, 45),
+           getrandom(30, 30),
+           getrandom(30, 20),
+           getrandom(30, 15),
+           getrandom(30, 43)
+        ];
+        
+        var colors = ['rgba(93, 164, 214, 0.5)', 'rgba(255, 144, 14, 0.5)', 'rgba(44, 160, 101, 0.5)', 'rgba(255, 65, 54, 0.5)', 'rgba(207, 114, 255, 0.5)', 'rgba(127, 96, 0, 0.5)', 'rgba(255, 140, 184, 0.5)', 'rgba(79, 90, 117, 0.5)', 'rgba(222, 223, 0, 0.5)'];
+        
+        var data = [];
+        
+        for ( var i = 0; i < xData.length; i ++ ) {
+          var result = {
+            type: 'box',
+            y: yData[i],
+            name: xData[i],
+            boxpoints: 'all',
+            jitter: 0.5,
+            whiskerwidth: 0.2,
+            fillcolor: 'cls',
+            marker: {
+              size: 2
+            },
+            line: {
+              width: 1
+            }
+          };
+          data.push(result);
+        }
+        
+        var layout = {
+            title: 'Points Scored by the Top 9 Scoring NBA Players in 2012',
+            yaxis: {
+                autorange: true,
+                showgrid: true,
+                zeroline: true,
+                dtick: 5,
+                gridcolor: 'rgb(255, 255, 255)',
+                gridwidth: 1,
+                zerolinecolor: 'rgb(255, 255, 255)',
+                zerolinewidth: 2
+            },
+            margin: {
+                l: 40,
+                r: 30,
+                b: 80,
+                t: 100
+            },
+            paper_bgcolor: 'rgb(243, 243, 243)',
+            plot_bgcolor: 'rgb(243, 243, 243)',
+            showlegend: false
+        };
+    
+    Plotly.newPlot('myDiv', data, layout, {showSendToCloud: true});
+    
+  },
+  count_hits: function() {
+  return this.response.hits.hits.length;
+ },
+ count_aggs: function() {
+     var a  = response.aggregations.UnitId.buckets;
+     return a[0].TestName.buckets[0].Avg.value;
+ },
+  all_aggs: function() {
+     var a = this.response.aggregations.UnitId.buckets;
+     return a;
+ },
+ debug: function() {
+  return JSON.stringify(this, null, ' ');
+ } 
+})
+
+
+<div id="myDiv" style="color:blue; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    
+</div>
+
+
+
+plotly-scatter
+
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "Operation": {
+              "value": "FT"
+            }
+          }
+        },
+        {
+          "terms": {
+            "LotNumber": [
+              "HG50212",
+              "HG50215"
+            ]
+          }
+        },
+        {
+          "term": {
+            "Type": {
+              "value": "PinMeasure"
+            }
+          }
+        },
+        {
+          "term": {
+            "Pin": {
+              "value": "S_VDDCR_SOC"
+            }
+          }
+        }
+      ],
+      "filter": {
+        "terms": {
+          "context": [
+            "Sidd_VddCrSoc_V1",
+            "Sidd_VddCrSoc_V3"
+          ]
+        }
+      }
+    }
+  },
+  "size": 0,
+  "aggs": {
+    "LotNumber": {
+      "terms": {
+        "field": "LotNumber",
+        "size": 2
+      },
+      "aggs": {
+        "UnitId": {
+          "terms": {
+            "field": "UnitId",
+            "size": 5000
+          },
+          "aggs": {
+            "TestName": {
+              "terms": {
+                "field": "context"
+              },
+              "aggs": {
+                "Avg": {
+                  "avg": {
+                    "field": "value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Helper":{
+      "terms": {
+        "field": "context",
+        "size": 10
+      },
+      "aggs": {
+        "max": {
+          "max": {
+            "field": "value"
+          }
+        },
+        "min":{
+          "min": {
+            "field": "value"
+          }
+          
+        }
+      }
+      
+    }
+
+    
+  }
+}
+
+
+({
+    
+    // This is to install external script/library
+    import_funnelLib: function() {
+        // $.getScript("https://canvasjs.com/assets/script/jquery.canvasjs.min.js", function( data, textStatus, jqxhr ) {
+        //    console.log("Import Complete");
+        //}); 
+    },
+ 
+   after_render: function() {
+    
+    var panelWidth = 800;
+    var panelHeight = 600;
+    
+    
+    var ob = document.getElementById("viz");
+    if(ob !== null){
+        panelHeight = ob.offsetHeight - 50; 
+        panelWidth = ob.offsetWidth - 50;
+        console.log("height = " + panelHeight);
+        console.log("widht = " + panelWidth);
+    }
+   
+    
+    
+    // define the data
+    var all_data = response.aggregations.LotNumber.buckets;
+    var lot_data_0 = response.aggregations.LotNumber.buckets[0].UnitId.buckets;
+    var lot_data_1 = response.aggregations.LotNumber.buckets[1].UnitId.buckets;
+    
+    var a = lot_data_0;
+    var b = lot_data_1;
+    
+    var minX = 0;
+    var minY = 0;
+    var maxX = 0;
+    var maxY = 0;
+    
+    
+    minX = response.aggregations.Helper.buckets[0].min.value;
+    maxX = response.aggregations.Helper.buckets[0].max.value;
+    
+    minY = response.aggregations.Helper.buckets[1].min.value;
+    maxY = response.aggregations.Helper.buckets[1].max.value;
+   
+    console.log("minX = " + minX);
+    console.log("maxX = " + maxX);
+   
+    console.log("minY = " + minY);
+    console.log("maxY = " + maxY);  
+   
+   
+
+    let lotno = 0;
+    var traces = [];
+    all_data.forEach(function(lot){
+        var data = lot.UnitId.buckets.filter(function (d){
+            return d.TestName.buckets.length === 2;
+        });
+        var lotNumber = lot.key;
+        
+        var x = [];
+        var y =[];
+        var unitid = [];
+        
+        let i = 0;
+        data.forEach(function(unit){
+            x[i] = unit.TestName.buckets[0].Avg.value;
+            y[i] = unit.TestName.buckets[1].Avg.value;
+            unitid[i] = unit.key;
+            i++;
+        });
+        var trace = {
+          x: x,
+          y: y,
+          mode: 'markers',
+          type: 'scatter',
+          name: lotNumber,
+          text: unitid,
+          marker: {size: 12, symbol: "diamond-open"}
+        };
+        traces[lotno] = trace;
+        lotno ++;
+        
+    })
+    
+    var layout = { 
+          /*
+          xaxis: {
+            range: [ 0.75, 5.25 ] 
+          },
+          yaxis: {
+            range: [0, 8]
+          },
+          */
+          title:'Data Labels Hover'
+        };
+
+    Plotly.newPlot('viz', traces, layout, {showSendToCloud: true});
+  },
+  
+  count_hits: function() {
+  return this.response.hits.hits.length;
+ },
+ count_aggs: function() {
+     var a  = response.aggregations.UnitId.buckets;
+     return a[0].TestName.buckets[0].Avg.value;
+ },
+  all_aggs: function() {
+     var a = this.response.aggregations.UnitId.buckets;
+     return a;
+ },
+ debug: function() {
+  return JSON.stringify(this, null, ' ');
+ } 
+})
+
+
+
+
+
+<div id="viz" style="color:blue; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    
+</div>
+
+
+<!--This imports the library so that D3 can be used-->
+{{meta.import_funnelLib}}
+
+
+
+
+scatter_plotly
+
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "Operation": {
+              "value": "FT"
+            }
+          }
+        },
+        {
+          "terms": {
+            "LotNumber": [
+              "HG50212",
+              "HG50215"
+            ]
+          }
+        },
+        {
+          "term": {
+            "Type": {
+              "value": "PinMeasure"
+            }
+          }
+        },
+        {
+          "term": {
+            "Pin": {
+              "value": "S_VDDCR_SOC"
+            }
+          }
+        }
+      ],
+      "filter": {
+        "terms": {
+          "context": [
+            "Sidd_VddCrSoc_V1",
+            "Sidd_VddCrSoc_V3"
+          ]
+        }
+      }
+    }
+  },
+  "size": 0,
+  "aggs": {
+    "LotNumber": {
+      "terms": {
+        "field": "LotNumber",
+        "size": 2
+      },
+      "aggs": {
+        "UnitId": {
+          "terms": {
+            "field": "UnitId",
+            "size": 5000
+          },
+          "aggs": {
+            "TestName": {
+              "terms": {
+                "field": "context"
+              },
+              "aggs": {
+                "Avg": {
+                  "avg": {
+                    "field": "value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Helper":{
+      "terms": {
+        "field": "context",
+        "size": 10
+      },
+      "aggs": {
+        "max": {
+          "max": {
+            "field": "value"
+          }
+        },
+        "min":{
+          "min": {
+            "field": "value"
+          }
+          
+        }
+      }
+      
+    }
+
+    
+  }
+}
+
+({
+   after_render: function() {
+       var innerContainer = document.getElementById('viz');
+       var symbolSelector = innerContainer.querySelector('.symbolData');
+       var colorSelector = innerContainer.querySelector('.colorsData');
+       var sizeSelector = innerContainer.querySelector('.sizeData');
+        
+       function add_option (){
+            var listofSymbos = ["diamond-open", "circle-open", "diamond", "circle-dot", "circle", "square-open", "square", "triangle-up-dot", "triangle-up-open-dot", "triangle-left-dot", "pentagon-dot", "hexagon-open",  "star-triangle-up-open-dot","hourglass-open","star-diamond-open-dot"];
+            
+            for (var i = 0; i < listofSymbos.length;  i++) {
+                var currentOption = document.createElement('option');
+                currentOption.text = listofSymbos[i];
+               symbolSelector.appendChild(currentOption);
+            }
+            function updatesymbol(){
+              console.log(symbolSelector.value);
+            }
+            symbolSelector.addEventListener('change', updatesymbol, false); 
+       }
+       
+        add_option();
+    
+    
+    // define the data
+    var all_data = response.aggregations.LotNumber.buckets;
+    var lot_data_0 = response.aggregations.LotNumber.buckets[0].UnitId.buckets;
+    var lot_data_1 = response.aggregations.LotNumber.buckets[1].UnitId.buckets;
+    
+    var a = lot_data_0;
+    var b = lot_data_1;
+    
+    var minX = 0;
+    var minY = 0;
+    var maxX = 0;
+    var maxY = 0;
+    
+    
+    minX = response.aggregations.Helper.buckets[0].min.value;
+    maxX = response.aggregations.Helper.buckets[0].max.value;
+    
+    minY = response.aggregations.Helper.buckets[1].min.value;
+    maxY = response.aggregations.Helper.buckets[1].max.value;
+   /*
+    console.log("minX = " + minX);
+    console.log("maxX = " + maxX);
+   
+    console.log("minY = " + minY);
+    console.log("maxY = " + maxY);  
+    */
+   
+
+    let lotno = 0;
+    var traces = [];
+    
+    all_data.forEach(function(lot){
+        var data = lot.UnitId.buckets.filter(function (d){
+            return d.TestName.buckets.length === 2;
+        });
+        var lotNumber = lot.key;
+        
+        var x = [];
+        var y =[];
+        var unitid = [];
+        
+        let i = 0;
+        data.forEach(function(unit){
+            x[i] = unit.TestName.buckets[0].Avg.value;
+            y[i] = unit.TestName.buckets[1].Avg.value;
+            unitid[i] = unit.key;
+            i++;
+        });
+        var trace = {
+          x: x,
+          y: y,
+          mode: 'markers',
+          type: 'scatter',
+          name: lotNumber,
+          text: unitid,
+          marker: {size: 12, symbol: symbolSelector[lotno].innerText}
+        };
+        traces[lotno] = trace;
+        lotno ++;
+        
+    })
+    
+    var layout = { 
+          hovermode:'closest',
+          xaxis: {
+            title: response.aggregations.Helper.buckets[0].key
+          },
+          yaxis: {
+            title: response.aggregations.Helper.buckets[1].key
+          },
+          
+          title: ''
+        };
+
+    Plotly.newPlot('viz', traces, layout, {showSendToCloud: true});
+    
+    innerContainer.on('plotly_click', function(data){
+      //alert('You clicked this Plotly chart!');
+      var pn='',
+          tn='',
+          colors=[];
+      for(var i=0; i < data.points.length; i++){
+        //pn = data.points[i].pointNumber;
+        tn = data.points[i].curveNumber;
+        //colors = data.points[i].data.marker.color;
+        //console.log("i = " + i);
+      }
+      console.log(symbolSelector);
+      
+      //colors = '#C54C82';
+        
+      var update = {'marker':{color: colorSelector.value.split(":")[1], size:sizeSelector.value, symbol: symbolSelector.value}};
+      Plotly.restyle('viz', update, [tn]);
+    });
+    innerContainer.on('plotly_restyle', function(data){
+      //console.log(data);
+    });
+  },
+  
+ count_hits: function() {
+  return this.response.hits.hits.length;
+ },
+ count_aggs: function() {
+     var a  = response.aggregations.UnitId.buckets;
+     return a[0].TestName.buckets[0].Avg.value;
+ },
+  all_aggs: function() {
+     var a = this.response.aggregations.UnitId.buckets;
+     return a;
+ },
+ debug: function() {
+  return JSON.stringify(this, null, ' ');
+ } 
+})
+
+
+
+
+
+<div id="viz" style="color:black; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    <div class="control-row" style = "float: left">
+        Country: <select class="symbolData">
+        </select>
+    </div>
+    <div class="control-row" style = "float: right">
+        Color: <select class="colorsData">
+            <option>Red:#FF0000</option>
+            <option>Green:#008000</option>
+            <option>Yellow:#FFFF00</option>
+            <option>Pink:#FFC0CB</option>
+            <option>Brown:#A52A2A</option>
+            <option>Blue:#0000FF</option>
+            <option>Grey:#808080</option>
+            <option>Orange:#FFA500</option>
+            <option>SkyBlue:#87CEEB</option>
+        </select>
+    </div>
+    <div class="control-row" style = "float: auto">
+        Size: <select class="sizeData">
+            <option>10</option>
+            <option>12</option>
+            <option>14</option>
+            <option>16</option>
+            <option>8</option>
+             
+        </select>
+    </div>
+</div>
+
+
+<!--This imports the library so that D3 can be used-->
+{{ meta.add_option }}
