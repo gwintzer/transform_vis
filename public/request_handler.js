@@ -8,7 +8,7 @@ const babelTransform = (code) => transform(code, { presets: ['es2015'] }).code;
 
 export function RequestHandlerProvider (Private, es) {
 
-  const myRequestHandler = ({ timeRange, filters, query, queryFilter, searchSource, visParams }) => {
+  const myRequestHandler = function ({ timeRange, filters, query, queryFilter, searchSource, visParams }) {
 
     const buildEsQuery = Private(BuildESQueryProvider);
     const options = chrome.getInjected('transformVisOptions');
@@ -39,6 +39,9 @@ export function RequestHandlerProvider (Private, es) {
 
     const bindme = {};
     bindme.context = context;
+    bindme.vis = this.vis;
+    bindme.buildEsQuery = buildEsQuery;
+    bindme.es = es;
     bindme.response = {};
 
     const fillPrevioudContext = (body, previousContextValue) =>
@@ -90,10 +93,14 @@ export function RequestHandlerProvider (Private, es) {
       }
     };
 
-    const fillTempate = () => {
+    const fillTempate = async () => {
       const formula = visParams.formula;
       try {
-        return ({ html: Mustache.render(formula, bindme), after_render: bindme.meta.after_render });
+        const awaitContext = {}
+        for (let key of Object.keys(bindme.meta)) {
+          awaitContext[key] = (typeof(bindme.meta[key]) === 'function' && key !== 'after_render') ? await bindme.meta[key].bind(bindme)() : bindme.meta[key]
+        }
+        return ({ html: Mustache.render(formula, { ...bindme, meta: awaitContext }), meta: bindme.meta, es, context });
       } catch (error) {
         return display_error('Error (See Console)', 'Mustache Template Error', error);
       }
