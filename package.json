@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@babel/standalone": "^7.0.0-beta.56",
+    "brace": "^0.11.1",
     "mustache": "2.3.0",
     "react-shadow": "^16.3.2"
   }

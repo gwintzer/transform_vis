@@ -12,7 +12,7 @@ class TransformVisComponent extends Component {
   }
 
   async afterRender() {
-    if (typeof this.props.meta.after_render === "function") {
+    if (this.props.meta && typeof this.props.meta.after_render === "function") {
       try {
         await this.props.meta.after_render.bind({
           el: this.el.current.parentNode.host.parentNode,
