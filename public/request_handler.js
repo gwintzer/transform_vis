@@ -1,5 +1,5 @@
 import chrome from 'ui/chrome';
-import { BuildESQueryProvider } from '@kbn/es-query'
+import { buildEsQuery } from '@kbn/es-query'
 
 const Mustache = require('mustache');
 
@@ -7,8 +7,6 @@ export const createRequestHandler = function(Private, es, indexPatterns, $saniti
   
     return function({ timeRange, filters, query, queryFilter, searchSource, visParams }) {
 
-
-      const buildEsQuery = Private(BuildESQueryProvider);
       const options = chrome.getInjected('transformVisOptions');
       
       return new Promise((resolve, reject) => {

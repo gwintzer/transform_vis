@@ -1,10 +1,10 @@
 {
   "name": "transform_vis",
-  "version": "6.6.1",
+  "version": "6.7.1",
   "description": "Transform Visualization",
   "main": "index.js",
   "kibana": {
-    "version": "6.6.1",
+    "version": "6.7.1",
     "templateVersion": "1.0.0"
   },
   "scripts": {
@@ -32,6 +32,7 @@
     "expect.js": "^0.3.1"
   },
   "dependencies": {
+    "@kbn/es-query": "link:../../kibana/packages/kbn-es-query",
     "mustache": "2.3.0"
   }
 }

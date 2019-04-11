@@ -1,4 +1,3 @@
-import './transform_vis.less';
 
 import { VisFactoryProvider } from 'ui/vis/vis_factory';
 import { VisTypesRegistryProvider } from 'ui/registry/vis_types';
