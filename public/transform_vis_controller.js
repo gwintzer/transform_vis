@@ -1,3 +1,4 @@
+import '@webcomponents/shadydom';
 import React, { Component } from 'react';
 import ShadowDOM from 'react-shadow';
 import OnMount from './on_mount';
