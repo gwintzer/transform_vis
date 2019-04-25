@@ -1,6 +1,6 @@
 {
   "name": "transform_vis",
-  "version": "6.6.1.5",
+  "version": "6.6.1.6",
   "description": "Transform Visualization",
   "main": "index.js",
   "kibana": {

@@ -53,7 +53,7 @@ export function RequestHandlerProvider (Private, es) {
         }
       });
 
-    const makeQuery = (query_name) => {
+    const makeQuery = async (query_name) => {
       const body = multiquerydsl[query_name];
       const index = body['index'];
       delete body['index'];
@@ -63,7 +63,7 @@ export function RequestHandlerProvider (Private, es) {
           const response = bindme.response;
           const meta = bindme.meta;
           const previousContextValue = eval(babelTransform(previousContextSource));
-          fillPrevioudContext(body, typeof previousContextValue === 'function' ? previousContextValue() : previousContextValue);
+          fillPrevioudContext(body, typeof previousContextValue === 'function' ? await previousContextValue() : previousContextValue);
         } catch (error) {
           return display_error('Error (See Console)', 'Previous Context Parse Error', error);
         }
