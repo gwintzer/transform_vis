@@ -4,7 +4,7 @@ import { transform } from '@babel/standalone';
 
 const Mustache = require('mustache');
 
-const babelTransform = (code) => transform(code, { presets: ['es2015'] }).code;
+const babelTransform = (code) => transform(code, { presets: ['es2015'], plugins: ['transform-async-to-generator'] }).code;
 
 export function RequestHandlerProvider (Private, es) {
 
