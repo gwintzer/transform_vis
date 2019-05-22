@@ -1,0 +1,2655 @@
+1: gmi
+{
+  "query": {
+    "bool": {
+      "must": [
+        "_DASHBOARD_CONTEXT_",
+        {
+          "term": {
+            "Type": {
+              "value": "Search"
+            }
+          }
+        },
+        {
+          "term": {
+            "comClass": {
+              "value": "GMICAKE"
+            }
+          }
+        },
+        {
+              "terms": {
+                "context": [
+                  "gmi_fulltrain_PRBS_5333_Vmin_tck_25MHz_VminSearch_VddCrSoc",
+                  "gmi_fulltrain_PRBS_5333_Vmin_tck_16MHz_VminSearch_VddCrSoc"
+                ]
+              }
+            }
+      ]
+    }
+  },
+  "aggs": {
+    "context": {
+      "terms": {
+        "field": "context",
+        "size": 20
+      }
+    }
+  }, 
+  "size": 10000,
+  "_source": [
+    "context",
+    "value",
+    "UnitId",
+    "TestCode",
+    "StartTimeStamp"
+  ]
+}
+
+
+
+({
+    /*
+    * please never try edit the js code
+     ****************************************************************
+     *  author: guanghao                                            *
+     *  description: box plot chart                                 *
+     *  the x is defined as the context name, that is the series    *
+     *  the y is defined as the test value, that is the group       *
+     *  limitation: max data size is 10000                          *
+     ****************************************************************
+     * how to edit the Query DSL?
+     * 1) modify the 'Operation' field if needed
+     * 2) modify the 'LotNumber' field to your target lot
+     * 3) modify the 'Type' field if needed
+     * 4) modify the 'Pin' field if needed
+     * 5) filter the test flow context
+     */
+    
+    after_render: function() {
+        //config to group what, temperature(default) or wafer split
+        const groupBy = {temperature: true, split: false};
+        //configuration for order, choose the sortMetric and only enabled one
+        var asc = true;
+        var sortMetric = {Min: false, Max: false, Mean: false, StdDev: false, Group: true};
+        // configuration what to track, and only enable one metric
+        var tarckMetric = {Min: false, Max: false, Mean: true, StdDev: false};
+        // config the wafer split
+        const waferSplit = [
+            {type: 'FF', value: ["H800B0003", "H800B0005", "M75NF0009", "M75NF0010", "M75NG0003"], index: 0},
+            {type: 'FS', value: ["H800B0011", "M75NG0011", "M75NG0012"], index: 1},
+            {type: 'SF', value: ["H800B0009", "H800B0010", "M75NG0009"], index: 2},
+            {type: 'SS', value: ["H800B0006", "H800C0003", "M75NG0006", "M75NG0007", "M75NG0008"], index: 3},
+            {type: 'TT', value: ["H800B0001", "H800F0002", "H800F0003", "H800F0004", "H800F0008", "H800F0010", "M75NH0003", "M75NH0010"], index: 4},
+        ];
+        
+        var all_legend = [];
+        
+        // config for test code to temperature
+        var AAQFNE = {temp: 20, index: 0};
+        var AANFNE = {temp: 95, index: 1};
+        var AASFNE = {temp: -5, index: 2};
+        var AATFNE = {temp: 40, index: 3};
+        const testCode = { AAQFNE: AAQFNE, AANFNE: AANFNE, AASFNE: AASFNE, AATFNE: AATFNE};
+        const colors = Plotly.d3.scale.category10();
+    
+        var myConfigValue = [
+            {V_Search: 'VminSearch', VoltageType: 'VddCrSoc', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'VddioMemS3', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'Vdd18', Value: 0.7, TestPoint: 1.62},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddCrSoc', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddioMemS3', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'Vdd18', Value: 2.0, TestPoint: 1.89}
+        ];
+        var a= document.getElementById("gmi-1");
+        var alert = a.children[0];
+        var boxPlot = a.children[1];
+        var dataTable = a.children[2];
+        //return false;
+        
+        var all_data = response.hits.hits;
+        if(all_data.length === 0){
+            alert.innerHTML += 'Empty Data in this Date Range';
+            return false;
+        }
+        
+        function getLegend(hit){
+            if(groupBy.temperature){
+                let legend = hit._source.TestCode;
+                
+                return {legend: testCode[legend]['temp'], index: testCode[legend]['index']};
+            }
+            else{
+                let spliter = waferSplit.find(function(split){
+                    let legend = hit._source.UnitId;
+                    let index = split.value.indexOf(legend.substring(0, 9));
+                    return (index >= 0);
+                });
+                return (spliter != null ? {legend: spliter.type, index: spliter.index} : {legend: 'undefined', index: waferSplit.length});
+            }
+        }
+        
+        // context e.g. gmi_fulltrain_PRBS_3200_Vmin_tck_25MHz_VminSearch_VddCrSoc
+        var context = all_data[0]._source.context;
+        
+        let V_Search = context.indexOf('Vmin') === -1 ? 'VmaxSearch': 'VminSearch';
+        let names = context.split('_');
+        let Frequency = names[names.length - 6];
+        let VoltageType = names[names.length - 1];
+        let title = 'V_Search=' + V_Search + ',VoltageType=' + VoltageType + ',Frequency=' + Frequency;
+        
+        var currConfigValue = {Value: 0, TestPoint: 1.2};
+        let configValue = myConfigValue.find(function(config){
+            return config.V_Search == V_Search && config.VoltageType == VoltageType;
+        });
+        if(configValue != null) {
+            currConfigValue = configValue;
+        }
+        console.log("current configuration is as below:");
+        console.log(currConfigValue);
+
+        var y = [];
+        var x = [];
+        var text = [];
+        
+        var datasets = [];
+        let no = 0;
+        
+        // aggs clk speed
+        var all_context = response.aggregations.context.buckets;
+        var all_clk = [];
+        let validContext = true;
+        
+        all_context.forEach(function(bucket){
+            let context = bucket.key;
+            console.log("context is: " + context)
+            if(validContext){
+                if(context.indexOf(V_Search) === -1){
+                    alert.innerHTML = 'all the context must be the same V_Search type';
+                    validContext = false;
+                }
+                if(context.indexOf(VoltageType) === -1){
+                    alert.innerHTML = 'all the context must be the same VoltageType';
+                    validContext = false;
+                }
+                if(context.indexOf(Frequency) === -1){
+                    alert.innerHTML = 'all the context must be the same Frequency';
+                    validContext = false;
+                }
+                let  names = context.split('_');
+                let clkSpeed = names[names.length - 3];
+                if(all_clk.indexOf(clkSpeed) === -1){
+                    all_clk[all_clk.length] = clkSpeed;
+                }
+            }
+        });
+        //console.log('all_clk:'+ all_clk);
+        if(!validContext){
+            return false;
+        }
+        all_clk.sort();
+        
+        all_data.forEach(function(hit){
+            // default test code, that is temperature
+            let group = getLegend(hit);
+            let index = group.index;
+            let legend = group.legend;
+            let context = hit._source.context;
+            let curr_dataset = datasets.find(function(dataSet){
+               return (dataSet.legend === legend && dataSet.context === context);
+            });
+            
+            if (curr_dataset == null) {
+                no = datasets.length;
+                curr_dataset = {legend: legend,  x: [],  y: [] , text: [], context: context, index: index};
+                datasets[no] = curr_dataset;
+            }
+            let y = curr_dataset.y;
+            let x = curr_dataset.x;
+            let text = curr_dataset.text;
+            
+            no = y.length;
+            y[no] = hit._source.value;
+            //console.log("value = " + y[no]);
+            if(y[no] == 0.0){
+                y[no] = currConfigValue['Value'];
+                //console.log("value 0 is replaced with " + y[no]);
+            }
+            text[no] = hit._source.UnitId;
+            //replace the context here
+            let names = context.split('_');
+            x[no] = legend;
+        });
+        
+        let minY = 1000;
+        let maxY = -1000;
+        // here start to sort trace by user specified param such as mean, max, min, std, median
+        datasets.forEach(function(dataSet){
+            let min = d3.min(dataSet.y, function(d) { return d });
+            let max = d3.max(dataSet.y, function(d) { return d });
+            let mean = d3.mean(dataSet.y, function(d) { return d });
+            let std = 0;
+            if(dataSet.length > 1){
+                std = d3.deviation(dataSet.y, function(d) { return d });
+            }
+            let median = d3.median(dataSet.y, function(d) { return d });
+            dataSet['min'] = min;
+            dataSet['max'] = max;
+            minY = minY > min ? min: minY;
+            maxY = maxY > max ? maxY : max; 
+            dataSet['mean'] = mean.toFixed(2);
+            dataSet['std'] = std.toFixed(2);
+            dataSet['median'] = median.toFixed(2);
+            //console.log('min: ' + min + ", max: " + max + ", mean: " + mean + ", std: " + std + ", median: " + median);
+            
+        });
+        
+        maxY = maxY > currConfigValue.TestPoint ? maxY : currConfigValue.TestPoint;
+        maxY = (maxY + 0.05).toFixed(1);
+        minY = (minY - 0.05).toFixed(1);
+        console.log("all data set in groups as below:");
+        console.log(datasets);
+        var headValues = [];
+        var table_colors = [];
+        headValues[0] = [''];
+        table_colors[0] = '#25FEFD';
+        var traces = [];
+        no = 0;
+        var groupNo = 1;
+        let groupSize = all_clk.length;
+        
+        
+        var layout = {
+          title:{text: title, font: {size: 15}},
+          yaxis: {
+            title: 'value',
+            zeroline: false,
+            hoverformat: '.2f',
+            range: [minY, maxY]
+          },
+          //boxmode: 'group'
+        };
+        all_clk.forEach(function(clk){
+            var curr_clk_group = datasets.filter(function(dataSet){
+               return (dataSet.context.indexOf(clk) != -1);
+            });
+            //console.log(clk);
+            //console.log(curr_clk_group);
+            
+            var xt = 'x' + (groupNo);
+            var xaxis = 'xaxis' + groupNo;
+            
+            let start = (groupNo - 1)/ groupSize;
+            let end = groupNo/groupSize - (groupSize ===  1 ? 0 : 1/10);
+            layout[xaxis] = {type: "category", domain:[start, end], title: clk};
+            let showLegend = groupNo === 1 ? true : false;
+            
+            // sort current traces here
+            
+            curr_clk_group.sort(function(a, b){
+                if(sortMetric['Min']) {
+                    return asc ? (a.min > b.min) : (a.min < b.min);
+                }
+                else if(sortMetric['Max']){
+                    return asc ? (a.max > b.max) : (a.max < b.max);
+                }
+                else if(sortMetric['Mean']){
+                    return asc ? (a.mean > b.mean) : (a.mean < b.mean);
+                }
+                else if(sortMetric['StdDev']){
+                    return asc ? (a.std > b.std) : (a.std < b.std);
+                }
+                else if(sortMetric['Group']){
+                    return asc ? (a.legend > b.legend) : (a.legend < b.legend);
+                }
+            });
+            var track_x = [];
+            var track_y = [];
+            var ucl_y = [];
+            var track_text = [];
+            
+            curr_clk_group.forEach(function(lot){
+                var tempIndex = lot.index;
+                var color = colors(tempIndex);
+                showLegend = false;
+                if(all_legend.indexOf(lot.legend) === -1){
+                    showLegend = true;
+                    all_legend[all_legend.length] = lot.legend;
+                }
+                
+                var trace = {
+                    type: 'box',
+                    y: lot.y,
+                    x: lot.x,
+                    xaxis: xt,
+                    text:lot.text,
+                    name: lot.legend,
+                    showlegend: showLegend,
+                    legendgroup: tempIndex,
+                    //name: testCode[lot.legend]['temp'] + '-' + lot.context.split('_')[lot.context.split('_').length - 3],
+                    
+                    marker: {
+                         color: color,
+                        //   outliercolor: 'rgba(219, 64, 82, 0.6)',
+                        //   line: {
+                        //     outliercolor: 'rgba(219, 64, 82, 1.0)',
+                        //     outlierwidth: 2
+                        //   },
+                      },
+                      boxpoints: 'all', //'suspectedoutliers', // all
+                      jitter: 1,
+                      boxmean: 'sd', // true
+                      pointpos: '0'
+                    };
+                    traces[no] = trace;
+                    headValues[no + 1] = clk + '-' + lot.legend;
+                    table_colors[no + 1] = color;
+                    track_text[track_text.length] = lot.legend;
+                    no++;
+                    
+                    ucl_y[ucl_y.length] = currConfigValue['TestPoint'];
+                    track_x[track_x.length] = lot.legend;
+                    if(tarckMetric['Min']) {
+                        track_y[track_y.length] = lot.min;
+                    }
+                    else if(tarckMetric['Max']){
+                        track_y[track_y.length] = lot.max;
+                    }
+                    else if(tarckMetric['Mean']){
+                        track_y[track_y.length] = lot.mean;
+                    }
+                    else if(tarckMetric['StdDev']){
+                        track_y[track_y.length] = lot.std;
+                    }
+                    else{
+                        track_y[track_y.length] = lot.mean;
+                    }
+            });
+            //add tracking lines here
+            var trace = {
+                    type: 'scatter',
+                    y: track_y,
+                    x: track_x,
+                    xaxis: xt,
+                    //text:lot.text,
+                    name: clk ,
+                    text: track_text,
+                    showlegend: false,
+                    line: {
+                        color: 'black',
+                        width: 1
+                    }
+            };
+            traces[datasets.length + groupNo -1 ] = trace;
+            
+            // add the ucl lines
+            var UCL = {
+              type: 'scatter',
+              x: track_x,
+              y: ucl_y,
+              xaxis: xt,
+              mode: 'lines',
+              name: 'UCL-' + clk ,
+              showlegend: false,
+              line: {
+                color: 'red',
+                width: 1,
+                dash: 'dash'
+              }
+            };
+            traces[datasets.length + groupNo -1 + all_clk.length] = UCL;
+            groupNo ++;
+        });
+        
+        Plotly.plot(boxPlot, traces,  layout, {showSendToCloud: true});
+        
+        boxPlot.on('plotly_legendclick', function(clickData){
+            //console.log(clickData.layout);
+            return false;
+        });
+        //console.log(layout);
+        var calcData = boxPlot.calcdata;
+        
+        console.log("box cal data as below:");
+        console.log(calcData);
+        
+        // assign the row value
+        var rows = [];
+        
+        
+        var values = [];
+        values[0] = ['Count', 'Min', 'Mean', 'Max', 'StdDev'];
+        
+        no = 0;
+        calcData.forEach(function(data){
+            if(no < datasets.length){
+                var Count = data[0].pts.length;
+                var Min = data[0].min.toFixed(2);
+                var Mean =data[0].mean.toFixed(2);
+                var Max =data[0].med.toFixed(2);
+                var StdDev = data[0].sd.toFixed(2);
+                var boxData = [Count, Min, Mean, Max, StdDev];
+                values[values.length] = boxData;
+            }
+            no ++;
+        });
+        
+        no = 0;
+        for(;no < values[0].length; no ++){
+            let colNo = 0;
+            var row = [];
+            for(;colNo != values.length; colNo ++){
+                row[colNo] = values[colNo][no];
+            }
+            rows[no] = row;
+        }
+        //console.log("rows value: ");
+        //console.log(rows);
+        
+        /*
+        datasets.forEach(function(data){
+            var Count = 25;
+            var Min = data.min;
+            var Mean =data.mean;
+            var Max =data.max;
+            var StdDev = data.sd;
+            var boxData = [Count, Min, Mean, Max, StdDev];
+            values[values.length] = boxData;
+            
+        });
+        
+        var data = [{
+          type: 'table',
+          header: {
+            values: headValues,
+            align: ["left", "center"],
+            line: {width: 1, color: '#506784'},
+            fill: {color: '#119DFF'},
+            font: {family: "Arial", size: 12, color: "white"}
+          },
+          cells: {
+            values: values,
+            align: ["left", "center"],
+            line: {color: "#506784", width: 1},
+        	 fill: {color: ['#25FEFD', 'white']},
+            font: {family: "Arial", size: 11, color: ["#506784"]} 
+          }
+        }];
+        
+        Plotly.plot('table', data, {}, {showSendToCloud: true});
+        console.log(values);
+        */
+    
+        
+        
+        
+        var tbl = dataTable;
+        var tblBody = document.createElement("tbody");
+        var row = document.createElement("tr");
+
+        // header row
+        for(var i = 0 ; i <=  datasets.length; i++){
+            var cell = document.createElement("th");
+            cell.setAttribute("font-size", "19"); 
+            var cellText = document.createTextNode(headValues[i]);
+            cell.appendChild(cellText);
+            row.appendChild(cell);
+        }
+        tblBody.appendChild(row);
+        
+        //value rows
+        rows.forEach(function(data){
+            var row = document.createElement("tr");
+            data.forEach(function(text){
+                var cell = document.createElement("td");
+                var cellText = document.createTextNode(text);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            });
+            tblBody.appendChild(row);
+        });
+        tbl.appendChild(tblBody);
+       
+    }
+})
+
+
+<style type="text/css">
+    table {
+    	background: #f5f5f5;
+    	font-size: 12px;
+    	line-height: 24px;
+    	text-align: middle;
+    }
+    th {
+    	border-left: 1px solid #555;
+    	border-right: 1px solid #777;
+    	border-top: 1px solid #555;
+    	border-bottom: 1px solid #333;
+        font-weight: 510;
+    }
+    td {
+    	border-right: 1px solid #fff;
+    	border-left: 1px solid #e8e8e8;
+    	border-top: 1px solid #fff;
+    	border-bottom: 1px solid #e8e8e8;
+    }
+</style> 
+
+<div id="gmi-1" class="myDiv" style="color:black; text-align:center; margin:0 auto; position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 12px">
+    <div id = 'alert'></div>
+    <div id = "boxplot" style = "float: top; height: 65%" ></div>
+    <table id= "dataTable" width="90%" height= '35%'></table>
+</div>
+
+
+2: gop
+{
+  "query": {
+    "bool": {
+      "must": [
+        "_DASHBOARD_CONTEXT_",
+        {
+          "term": {
+            "Type": {
+              "value": "Search"
+            }
+          }
+        },
+         {
+          "term": {
+            "comClass": {
+              "value": "COMBOPHY"
+            }
+          }
+        },
+        {
+          "terms": {
+            "context": [
+              "gop_iNELB_PCS_Vmax_9600_VmaxSearch_VddioMemS3"
+            ]
+          }
+        },
+          {
+          "exists": {
+            "field": "Temperature"
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "context": {
+      "terms": {
+        "field": "context",
+        "size": 20
+      }
+    }
+  }, 
+  "size": 10000,
+  "_source": [
+    "context",
+    "value",
+    "UnitId",
+    "TestCode",
+    "StartTimeStamp",
+    "Temperature"
+  ]
+}
+
+
+
+
+
+({
+    /*
+    * please never try edit the js code
+     ****************************************************************
+     *  author: guanghao                                            *
+     *  description: box plot chart                                 *
+     *  the x is defined as the context name, that is the series    *
+     *  the y is defined as the test value, that is the group       *
+     *  limitation: max data size is 10000                          *
+     ****************************************************************
+     * how to edit the Query DSL?
+     * 1) modify the 'Operation' field if needed
+     * 2) modify the 'LotNumber' field to your target lot
+     * 3) modify the 'Type' field if needed
+     * 4) modify the 'Pin' field if needed
+     * 5) filter the test flow context
+     */
+    
+    after_render: function() {
+        //config to group what, temperature(default) or wafer split
+        const groupBy = {temperature: true, split: false};
+        //configuration for order, choose the sortMetric and only enabled one
+        var asc = true;
+        var sortMetric = {Min: false, Max: false, Mean: false, StdDev: false, Group: true};
+        // configuration what to track, and only enable one metric
+        var tarckMetric = {Min: false, Max: false, Mean: true, StdDev: false};
+        // config the wafer split
+        const waferSplit = [
+            {type: 'FF', value: ["H800B0003", "H800B0005", "M75NF0009", "M75NF0010", "M75NG0003"], index: 0},
+            {type: 'FS', value: ["H800B0011", "M75NG0011", "M75NG0012"], index: 1},
+            {type: 'SF', value: ["H800B0009", "H800B0010", "M75NG0009"], index: 2},
+            {type: 'SS', value: ["H800B0006", "H800C0003", "M75NG0006", "M75NG0007", "M75NG0008"], index: 3},
+            {type: 'TT', value: ["H800B0001", "H800F0002", "H800F0003", "H800F0004", "H800F0008", "H800F0010", "M75NH0003", "M75NH0010"], index: 4},
+        ];
+        var all_legend = [];
+        // config for test code to temperature
+        var AAQFNE = {temp: 20, index: 0};
+        var AANFNE = {temp: 50, index: 1};
+        var AASFNE = {temp: 90, index: 2};
+        var AATFNE = {temp: 100, index: 3};
+        const testCode = { AAQFNE: AAQFNE, AANFNE: AANFNE, AASFNE: AASFNE, AATFNE: AATFNE};
+        const colors = Plotly.d3.scale.category10();
+        var temperature = [];
+    
+        var myConfigValue = [
+            {V_Search: 'VminSearch', VoltageType: 'VddCrSoc', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'VddioMemS3', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'Vdd18', Value: 0.7, TestPoint: 1.62},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddCrSoc', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddioMemS3', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'Vdd18', Value: 2.0, TestPoint: 1.89}
+        ];
+        //var useDefaultMax = true;
+        var a= document.getElementById("gop-1");
+        var alert = a.children[0];
+        var boxPlot = a.children[1];
+        var dataTable = a.children[2];
+       
+        var all_data = response.hits.hits;
+        if(all_data.length === 0){
+            alert.innerHTML += 'Empty Data in this Date Range';
+            return false;
+        }
+        
+        function getLegend(hit){
+            if(groupBy.temperature){
+                let legend = hit._source.TestCode;
+                //already has Temperature
+                legend = hit._source.Temperature;
+                //return {legend: testCode[legend]['temp'], index: testCode[legend]['index']};
+                if(temperature.indexOf(legend) === -1 ){
+                    temperature[temperature.length] = legend;
+                }
+                return {legend: legend, index: temperature.indexOf(legend)};
+            }
+            else{
+                let spliter = waferSplit.find(function(split){
+                    let legend = hit._source.UnitId;
+                    let index = split.value.indexOf(legend.substring(0, 9));
+                    return (index >= 0);
+                });
+                return (spliter != null ? {legend: spliter.type, index: spliter.index} : {legend: 'undefined', index: waferSplit.length});
+            }
+        }
+        
+        // context e.g. gmi_fulltrain_PRBS_3200_Vmin_tck_25MHz_VminSearch_VddCrSoc
+        var context = all_data[0]._source.context;
+        
+        let V_Search = context.indexOf('Vmin') === -1 ? 'VmaxSearch': 'VminSearch';
+        let names = context.split('_');
+        let Frequency = names[4];
+        let VoltageType = names[names.length - 1];
+        let title = 'V_Search=' + V_Search + ',VoltageType=' + VoltageType + ',Frequency=' + Frequency;
+        
+        var currConfigValue = {Value: 0, TestPoint: 1.2};
+        let configValue = myConfigValue.find(function(config){
+            return config.V_Search == V_Search && config.VoltageType == VoltageType;
+        });
+        if(configValue != null) {
+            currConfigValue = configValue;
+        }
+        console.log("current configuration is as below:");
+        console.log(currConfigValue);
+
+        var y = [];
+        var x = [];
+        var text = [];
+        
+        var datasets = [];
+        let no = 0;
+        
+        // aggs clk speed
+        var all_context = response.aggregations.context.buckets;
+        var all_clk = [];
+        
+        all_context.forEach(function(bucket){
+            let context = bucket.key;
+            let  names = context.split('_');
+            let clkSpeed = names[4];
+            if(all_clk.indexOf(clkSpeed) === -1){
+                all_clk[all_clk.length] = clkSpeed;
+            }
+        });
+        //console.log('all_clk:'+ all_clk);
+        all_clk.sort();
+        
+        all_data.forEach(function(hit){
+            // default test code, that is temperature
+            let group = getLegend(hit);
+            let index = group.index;
+            let legend = group.legend;
+            let context = hit._source.context;
+            let curr_dataset = datasets.find(function(dataSet){
+               return (dataSet.legend === legend && dataSet.context === context);
+            });
+            
+            if (curr_dataset == null) {
+                no = datasets.length;
+                curr_dataset = {legend: legend,  x: [],  y: [] , text: [], context: context, index: index};
+                datasets[no] = curr_dataset;
+            }
+            let y = curr_dataset.y;
+            let x = curr_dataset.x;
+            let text = curr_dataset.text;
+            
+            no = y.length;
+            y[no] = hit._source.value;
+            //console.log("value = " + y[no]);
+            if(y[no] == 0.0){
+                y[no] = currConfigValue['Value'];
+                //console.log("value 0 is replaced with " + y[no]);
+            }
+            text[no] = hit._source.UnitId;
+            //replace the context here
+            let names = context.split('_');
+            x[no] = legend;
+        });
+        
+        let minY = 1000;
+        let maxY = -1000;
+        // here start to sort trace by user specified param such as mean, max, min, std, median
+        datasets.forEach(function(dataSet){
+            let min = d3.min(dataSet.y, function(d) { return d });
+            let max = d3.max(dataSet.y, function(d) { return d });
+            let mean = d3.mean(dataSet.y, function(d) { return d });
+            let std = 0;
+            if(dataSet.length > 1){
+                std = d3.deviation(dataSet.y, function(d) { return d });
+            }
+            let median = d3.median(dataSet.y, function(d) { return d });
+            dataSet['min'] = min;
+            dataSet['max'] = max;
+            minY = minY > min ? min: minY;
+            maxY = maxY > max ? maxY : max; 
+            dataSet['mean'] = mean.toFixed(2);
+            dataSet['std'] = std.toFixed(2);
+            dataSet['median'] = median.toFixed(2);
+            //console.log('min: ' + min + ", max: " + max + ", mean: " + mean + ", std: " + std + ", median: " + median);
+            
+        });
+        
+        maxY = maxY > currConfigValue.TestPoint ? maxY : currConfigValue.TestPoint;
+        maxY = (maxY + 0.05).toFixed(1);
+        minY = (minY - 0.05).toFixed(1);
+        console.log("all data set in groups as below:");
+        console.log(datasets);
+        var headValues = [];
+        var table_colors = [];
+        headValues[0] = [''];
+        table_colors[0] = '#25FEFD';
+        var traces = [];
+        no = 0;
+        var groupNo = 1;
+        let groupSize = all_clk.length;
+        
+        
+        var layout = {
+          title:{text: title, font: {size: 15}},
+          yaxis: {
+            title: 'value',
+            zeroline: false,
+            hoverformat: '.2f',
+            range: [minY, maxY]
+          },
+          //boxmode: 'group'
+        };
+        all_clk.forEach(function(clk){
+            var curr_clk_group = datasets.filter(function(dataSet){
+               return (dataSet.context.indexOf(clk) != -1);
+            });
+            //console.log(clk);
+            //console.log(curr_clk_group);
+            
+            var xt = 'x' + (groupNo);
+            var xaxis = 'xaxis' + groupNo;
+            
+            let start = (groupNo - 1)/ groupSize;
+            let end = groupNo/groupSize - (groupSize ===  1 ? 0 : 1/10);
+            layout[xaxis] = {type: "category", domain:[start, end], title: clk};
+            let showLegend = groupNo === 1 ? true : false;
+            
+            // sort current traces here
+            
+            curr_clk_group.sort(function(a, b){
+                if(sortMetric['Min']) {
+                    return asc ? (a.min > b.min) : (a.min < b.min);
+                }
+                else if(sortMetric['Max']){
+                    return asc ? (a.max > b.max) : (a.max < b.max);
+                }
+                else if(sortMetric['Mean']){
+                    return asc ? (a.mean > b.mean) : (a.mean < b.mean);
+                }
+                else if(sortMetric['StdDev']){
+                    return asc ? (a.std > b.std) : (a.std < b.std);
+                }
+                else if(sortMetric['Group']){
+                    return asc ? (a.legend > b.legend) : (a.legend < b.legend);
+                }
+            });
+            var track_x = [];
+            var track_y = [];
+            var ucl_y = [];
+            var track_text = [];
+            
+            curr_clk_group.forEach(function(lot){
+                var tempIndex = lot.index;
+                var color = colors(tempIndex);
+                showLegend = false;
+                if(all_legend.indexOf(lot.legend) === -1){
+                    showLegend = true;
+                    all_legend[all_legend.length] = lot.legend;
+                }
+                
+                var trace = {
+                    type: 'box',
+                    y: lot.y,
+                    x: lot.x,
+                    xaxis: xt,
+                    text:lot.text,
+                    name: lot.legend,
+                    showlegend: showLegend,
+                    legendgroup: tempIndex,
+                    //name: testCode[lot.legend]['temp'] + '-' + lot.context.split('_')[lot.context.split('_').length - 3],
+                    
+                    marker: {
+                         color: color,
+                        //   outliercolor: 'rgba(219, 64, 82, 0.6)',
+                        //   line: {
+                        //     outliercolor: 'rgba(219, 64, 82, 1.0)',
+                        //     outlierwidth: 2
+                        //   },
+                      },
+                      boxpoints: 'all', //'suspectedoutliers', // all
+                      jitter: 1,
+                      boxmean: 'sd', // true
+                      pointpos: '0'
+                    };
+                    traces[no] = trace;
+                    headValues[no + 1] = clk + '-' + lot.legend;
+                    table_colors[no + 1] = color;
+                    track_text[track_text.length] = lot.legend;
+                    no++;
+                    
+                    ucl_y[ucl_y.length] = currConfigValue['TestPoint'];
+                    track_x[track_x.length] = lot.legend;
+                    if(tarckMetric['Min']) {
+                        track_y[track_y.length] = lot.min;
+                    }
+                    else if(tarckMetric['Max']){
+                        track_y[track_y.length] = lot.max;
+                    }
+                    else if(tarckMetric['Mean']){
+                        track_y[track_y.length] = lot.mean;
+                    }
+                    else if(tarckMetric['StdDev']){
+                        track_y[track_y.length] = lot.std;
+                    }
+                    else{
+                        track_y[track_y.length] = lot.mean;
+                    }
+            });
+            //add tracking lines here
+            var trace = {
+                    type: 'scatter',
+                    y: track_y,
+                    x: track_x,
+                    xaxis: xt,
+                    //text:lot.text,
+                    name: clk ,
+                    text: track_text,
+                    showlegend: false,
+                    line: {
+                        color: 'black',
+                        width: 1
+                    }
+            };
+            traces[datasets.length + groupNo -1 ] = trace;
+            
+            // add the ucl lines
+            var UCL = {
+              type: 'scatter',
+              x: track_x,
+              y: ucl_y,
+              xaxis: xt,
+              mode: 'lines',
+              name: 'UCL-' + clk ,
+              showlegend: false,
+              line: {
+                color: 'red',
+                width: 1,
+                dash: 'dash'
+              }
+            };
+            traces[datasets.length + groupNo -1 + all_clk.length] = UCL;
+            groupNo ++;
+        });
+        Plotly.plot(boxPlot, traces,  layout, {showSendToCloud: true});
+        
+        
+        boxPlot.on('plotly_legendclick', function(clickData){
+            //console.log(clickData.layout);
+            return false;
+        });
+        //console.log(layout);
+        var calcData = boxPlot.calcdata;
+        
+        console.log("box cal data as below:");
+        console.log(calcData);
+        
+        // assign the row value
+        var rows = [];
+        
+        
+        var values = [];
+        values[0] = ['Count', 'Min', 'Mean', 'Max', 'StdDev'];
+        
+        no = 0;
+        calcData.forEach(function(data){
+            if(no < datasets.length){
+                var Count = data[0].pts.length;
+                var Min = data[0].min.toFixed(2);
+                var Mean =data[0].mean.toFixed(2);
+                var Max =data[0].med.toFixed(2);
+                var StdDev = data[0].sd.toFixed(2);
+                var boxData = [Count, Min, Mean, Max, StdDev];
+                values[values.length] = boxData;
+            }
+            no ++;
+        });
+        
+        no = 0;
+        for(;no < values[0].length; no ++){
+            let colNo = 0;
+            var row = [];
+            for(;colNo != values.length; colNo ++){
+                row[colNo] = values[colNo][no];
+            }
+            rows[no] = row;
+        }
+        //console.log("rows value: ");
+        //console.log(rows);
+        
+        /*
+        datasets.forEach(function(data){
+            var Count = 25;
+            var Min = data.min;
+            var Mean =data.mean;
+            var Max =data.max;
+            var StdDev = data.sd;
+            var boxData = [Count, Min, Mean, Max, StdDev];
+            values[values.length] = boxData;
+            
+        });
+        
+        var data = [{
+          type: 'table',
+          header: {
+            values: headValues,
+            align: ["left", "center"],
+            line: {width: 1, color: '#506784'},
+            fill: {color: '#119DFF'},
+            font: {family: "Arial", size: 12, color: "white"}
+          },
+          cells: {
+            values: values,
+            align: ["left", "center"],
+            line: {color: "#506784", width: 1},
+        	 fill: {color: ['#25FEFD', 'white']},
+            font: {family: "Arial", size: 11, color: ["#506784"]} 
+          }
+        }];
+        
+        Plotly.plot('table', data, {}, {showSendToCloud: true});
+        console.log(values);
+        */
+    
+        
+        var tbl = dataTable;
+        var tblBody = document.createElement("tbody");
+        var row = document.createElement("tr");
+
+        // header row
+        for(var i = 0 ; i <=  datasets.length; i++){
+            var cell = document.createElement("th");
+            cell.setAttribute("font-size", "19"); 
+            var cellText = document.createTextNode(headValues[i]);
+            cell.appendChild(cellText);
+            row.appendChild(cell);
+        }
+        tblBody.appendChild(row);
+        
+        //value rows
+        rows.forEach(function(data){
+            var row = document.createElement("tr");
+            data.forEach(function(text){
+                var cell = document.createElement("td");
+                var cellText = document.createTextNode(text);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            });
+            tblBody.appendChild(row);
+        });
+        tbl.appendChild(tblBody);
+    }
+})
+
+
+<style type="text/css">
+    table {
+    	background: #f5f5f5;
+    	font-size: 12px;
+    	line-height: 24px;
+    	text-align: middle;
+    }
+    th {
+    	border-left: 1px solid #555;
+    	border-right: 1px solid #777;
+    	border-top: 1px solid #555;
+    	border-bottom: 1px solid #333;
+        font-weight: 510;
+    }
+    td {
+    	border-right: 1px solid #fff;
+    	border-left: 1px solid #e8e8e8;
+    	border-top: 1px solid #fff;
+    	border-bottom: 1px solid #e8e8e8;
+    }
+</style> 
+
+<div id="gop-1" class="myDiv" style="color:black; text-align:center; margin:0 auto; position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 12px">
+    <div id = 'alert'></div>
+    <div id = "boxplot" style = "float: top; height: 65%" ></div>
+    <table id= "dataTable" width="90%" height= '35%'></table>
+</div>
+
+3: pcie
+{
+  "query": {
+    "bool": {
+      "must": [
+        "_DASHBOARD_CONTEXT_",
+        {
+          "term": {
+            "Type": {
+              "value": "Search"
+            }
+          }
+        },
+         {
+          "term": {
+            "comName": {
+              "value": "DIE_0_PCIE_0"
+            }
+          }
+        },
+        {
+          "terms": {
+            "context": [
+              "pcie_pcs_inelb_gen3_Vmin_VminSearch_VddioMemS3",
+              "pcie_pcs_inelb_gen2_Vmin_VminSearch_VddioMemS3",
+              "pcie_pcs_inelb_gen1_Vmin_VminSearch_VddioMemS3"
+            ]
+          }
+        },
+          {
+          "exists": {
+            "field": "Temperature"
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "context": {
+      "terms": {
+        "field": "context",
+        "size": 20
+      }
+    }
+  }, 
+  "size": 10000,
+  "_source": [
+    "context",
+    "value",
+    "UnitId",
+    "TestCode",
+    "StartTimeStamp",
+    "Temperature"
+  ]
+}
+
+
+
+
+
+({
+    /*
+    * please never try edit the js code
+     ****************************************************************
+     *  author: guanghao                                            *
+     *  description: box plot chart                                 *
+     *  the x is defined as the context name, that is the series    *
+     *  the y is defined as the test value, that is the group       *
+     *  limitation: max data size is 10000                          *
+     ****************************************************************
+     * how to edit the Query DSL?
+     * 1) modify the 'Operation' field if needed
+     * 2) modify the 'LotNumber' field to your target lot
+     * 3) modify the 'Type' field if needed
+     * 4) modify the 'Pin' field if needed
+     * 5) filter the test flow context
+     */
+    
+    after_render: function() {
+        //config to group what, temperature(default) or wafer split
+        const groupBy = {temperature: false, split: true};
+        //configuration for order, choose the sortMetric and only enabled one
+        var asc = true;
+        var sortMetric = {Min: false, Max: false, Mean: false, StdDev: false, Group: true};
+        // configuration what to track, and only enable one metric
+        var tarckMetric = {Min: false, Max: false, Mean: true, StdDev: false};
+        // config the wafer split
+        const waferSplit = [
+            {type: 'FF', value: ["H800B0003", "H800B0005", "M75NF0009", "M75NF0010", "M75NG0003"], index: 0},
+            {type: 'FS', value: ["H800B0011", "M75NG0011", "M75NG0012"], index: 1},
+            {type: 'SF', value: ["H800B0009", "H800B0010", "M75NG0009"], index: 2},
+            {type: 'SS', value: ["H800B0006", "H800C0003", "M75NG0006", "M75NG0007", "M75NG0008"], index: 3},
+            {type: 'TT', value: ["H800B0001", "H800F0002", "H800F0003", "H800F0004", "H800F0008", "H800F0010", "M75NH0003", "M75NH0010"], index: 4},
+        ];
+        
+        var all_legend = [];
+        
+        // config for test code to temperature
+        var AAQFNE = {temp: 20, index: 0};
+        var AANFNE = {temp: 50, index: 1};
+        var AASFNE = {temp: 90, index: 2};
+        var AATFNE = {temp: 100, index: 3};
+        const testCode = { AAQFNE: AAQFNE, AANFNE: AANFNE, AASFNE: AASFNE, AATFNE: AATFNE};
+        const colors = Plotly.d3.scale.category10();
+        var temperature = [];
+    
+        var myConfigValue = [
+            {V_Search: 'VminSearch', VoltageType: 'VddCrSoc', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'VddioMemS3', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'Vdd18', Value: 0.7, TestPoint: 1.62},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddCrSoc', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddioMemS3', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'Vdd18', Value: 2.0, TestPoint: 1.89}
+        ];
+        //var useDefaultMax = true;
+        var a= document.getElementById("pcie-1");
+        var alert = a.children[0];
+        var boxPlot = a.children[1];
+        var dataTable = a.children[2];
+        
+        var all_data = response.hits.hits;
+        if(all_data.length === 0){
+            alert.innerHTML += 'Empty Data in this Date Range';
+            return false;
+        }
+        
+        function getLegend(hit){
+            if(groupBy.temperature){
+                let legend = hit._source.TestCode;
+                //already has Temperature
+                legend = hit._source.Temperature;
+                //return {legend: testCode[legend]['temp'], index: testCode[legend]['index']};
+                if(temperature.indexOf(legend) === -1 ){
+                    temperature[temperature.length] = legend;
+                }
+                return {legend: legend, index: temperature.indexOf(legend)};
+            }
+            else{
+                let spliter = waferSplit.find(function(split){
+                    let legend = hit._source.UnitId;
+                    let index = split.value.indexOf(legend.substring(0, 9));
+                    return (index >= 0);
+                });
+                return (spliter != null ? {legend: spliter.type, index: spliter.index} : {legend: 'undefined', index: waferSplit.length});
+            }
+        }
+        
+        // context e.g. gmi_fulltrain_PRBS_3200_Vmin_tck_25MHz_VminSearch_VddCrSoc
+        var context = all_data[0]._source.context;
+        
+        let V_Search = context.indexOf('Vmin') === -1 ? 'VmaxSearch': 'VminSearch';
+        let names = context.split('_');
+        let Frequency = names[2];
+        let VoltageType = names[names.length - 1];
+        let title = 'V_Search=' + V_Search + ',VoltageType=' + VoltageType + ',Type=' + Frequency;
+        
+        var currConfigValue = {Value: 0, TestPoint: 1.2};
+        let configValue = myConfigValue.find(function(config){
+            return config.V_Search == V_Search && config.VoltageType == VoltageType;
+        });
+        if(configValue != null) {
+            currConfigValue = configValue;
+        }
+        console.log("current configuration is as below:");
+        console.log(currConfigValue);
+
+        var y = [];
+        var x = [];
+        var text = [];
+        
+        var datasets = [];
+        let no = 0;
+        
+        // aggs clk speed
+        var all_context = response.aggregations.context.buckets;
+        var all_clk = [];
+        
+        all_context.forEach(function(bucket){
+            let context = bucket.key;
+            let  names = context.split('_');
+            let clkSpeed = names[3];
+            if(all_clk.indexOf(clkSpeed) === -1){
+                all_clk[all_clk.length] = clkSpeed;
+            }
+        });
+        //console.log('all_clk:'+ all_clk);
+        all_clk.sort();
+        
+        all_data.forEach(function(hit){
+            // default test code, that is temperature
+            let group = getLegend(hit);
+            let index = group.index;
+            let legend = group.legend;
+            let context = hit._source.context;
+            let curr_dataset = datasets.find(function(dataSet){
+               return (dataSet.legend === legend && dataSet.context === context);
+            });
+            
+            if (curr_dataset == null) {
+                no = datasets.length;
+                curr_dataset = {legend: legend,  x: [],  y: [] , text: [], context: context, index: index};
+                datasets[no] = curr_dataset;
+            }
+            let y = curr_dataset.y;
+            let x = curr_dataset.x;
+            let text = curr_dataset.text;
+            
+            no = y.length;
+            y[no] = hit._source.value;
+            //console.log("value = " + y[no]);
+            if(y[no] == 0.0){
+                y[no] = currConfigValue['Value'];
+                //console.log("value 0 is replaced with " + y[no]);
+            }
+            text[no] = hit._source.UnitId;
+            //replace the context here
+            let names = context.split('_');
+            x[no] = legend;
+        });
+        
+        let minY = 1000;
+        let maxY = -1000;
+        // here start to sort trace by user specified param such as mean, max, min, std, median
+        datasets.forEach(function(dataSet){
+            let min = d3.min(dataSet.y, function(d) { return d });
+            let max = d3.max(dataSet.y, function(d) { return d });
+            let mean = d3.mean(dataSet.y, function(d) { return d });
+            let std = 0;
+            if(dataSet.length > 1){
+                std = d3.deviation(dataSet.y, function(d) { return d });
+            }
+            let median = d3.median(dataSet.y, function(d) { return d });
+            dataSet['min'] = min;
+            dataSet['max'] = max;
+            minY = minY > min ? min: minY;
+            maxY = maxY > max ? maxY : max; 
+            dataSet['mean'] = mean.toFixed(2);
+            dataSet['std'] = std.toFixed(2);
+            dataSet['median'] = median.toFixed(2);
+            //console.log('min: ' + min + ", max: " + max + ", mean: " + mean + ", std: " + std + ", median: " + median);
+            
+        });
+        
+        maxY = maxY > currConfigValue.TestPoint ? maxY : currConfigValue.TestPoint;
+        maxY = (maxY + 0.05).toFixed(1);
+        minY = (minY - 0.05).toFixed(1);
+        console.log("all data set in groups as below:");
+        console.log(datasets);
+        var headValues = [];
+        var table_colors = [];
+        headValues[0] = [''];
+        table_colors[0] = '#25FEFD';
+        var traces = [];
+        no = 0;
+        var groupNo = 1;
+        let groupSize = all_clk.length;
+        
+        
+        var layout = {
+          title:{text: title, font: {size: 15}},
+          yaxis: {
+            title: 'value',
+            zeroline: false,
+            hoverformat: '.2f',
+            range: [minY, maxY]
+          },
+          //boxmode: 'group'
+        };
+        all_clk.forEach(function(clk){
+            var curr_clk_group = datasets.filter(function(dataSet){
+               return (dataSet.context.indexOf(clk) != -1);
+            });
+            //console.log(clk);
+            //console.log(curr_clk_group);
+            
+            var xt = 'x' + (groupNo);
+            var xaxis = 'xaxis' + groupNo;
+            
+            let start = (groupNo - 1)/ groupSize;
+            let end = groupNo/groupSize - (groupSize ===  1 ? 0 : 1/10);
+            layout[xaxis] = {type: "category", domain:[start, end], title: clk};
+            let showLegend = groupNo === 1 ? true : false;
+            
+            // sort current traces here
+            
+            curr_clk_group.sort(function(a, b){
+                if(sortMetric['Min']) {
+                    return asc ? (a.min > b.min) : (a.min < b.min);
+                }
+                else if(sortMetric['Max']){
+                    return asc ? (a.max > b.max) : (a.max < b.max);
+                }
+                else if(sortMetric['Mean']){
+                    return asc ? (a.mean > b.mean) : (a.mean < b.mean);
+                }
+                else if(sortMetric['StdDev']){
+                    return asc ? (a.std > b.std) : (a.std < b.std);
+                }
+                else if(sortMetric['Group']){
+                    return asc ? (a.legend > b.legend) : (a.legend < b.legend);
+                }
+            });
+            var track_x = [];
+            var track_y = [];
+            var ucl_y = [];
+            var track_text = [];
+            
+            curr_clk_group.forEach(function(lot){
+                var tempIndex = lot.index;
+                var color = colors(tempIndex);
+                showLegend = false;
+                if(all_legend.indexOf(lot.legend) === -1){
+                    showLegend = true;
+                    all_legend[all_legend.length] = lot.legend;
+                }
+                
+                var trace = {
+                    type: 'box',
+                    y: lot.y,
+                    x: lot.x,
+                    xaxis: xt,
+                    text:lot.text,
+                    name: lot.legend,
+                    showlegend: showLegend,
+                    legendgroup: tempIndex,
+                    //name: testCode[lot.legend]['temp'] + '-' + lot.context.split('_')[lot.context.split('_').length - 3],
+                    
+                    marker: {
+                         color: color,
+                        //   outliercolor: 'rgba(219, 64, 82, 0.6)',
+                        //   line: {
+                        //     outliercolor: 'rgba(219, 64, 82, 1.0)',
+                        //     outlierwidth: 2
+                        //   },
+                      },
+                      boxpoints: 'all', //'suspectedoutliers', // all
+                      jitter: 1,
+                      boxmean: 'sd', // true
+                      pointpos: '0'
+                    };
+                    traces[no] = trace;
+                    headValues[no + 1] = clk + '-' + lot.legend;
+                    table_colors[no + 1] = color;
+                    track_text[track_text.length] = lot.legend;
+                    no++;
+                    
+                    ucl_y[ucl_y.length] = currConfigValue['TestPoint'];
+                    track_x[track_x.length] = lot.legend;
+                    if(tarckMetric['Min']) {
+                        track_y[track_y.length] = lot.min;
+                    }
+                    else if(tarckMetric['Max']){
+                        track_y[track_y.length] = lot.max;
+                    }
+                    else if(tarckMetric['Mean']){
+                        track_y[track_y.length] = lot.mean;
+                    }
+                    else if(tarckMetric['StdDev']){
+                        track_y[track_y.length] = lot.std;
+                    }
+                    else{
+                        track_y[track_y.length] = lot.mean;
+                    }
+            });
+            //add tracking lines here
+            var trace = {
+                    type: 'scatter',
+                    y: track_y,
+                    x: track_x,
+                    xaxis: xt,
+                    //text:lot.text,
+                    name: clk ,
+                    text: track_text,
+                    showlegend: false,
+                    line: {
+                        color: 'black',
+                        width: 1
+                    }
+            };
+            traces[datasets.length + groupNo -1 ] = trace;
+            
+            // add the ucl lines
+            var UCL = {
+              type: 'scatter',
+              x: track_x,
+              y: ucl_y,
+              xaxis: xt,
+              mode: 'lines',
+              name: 'UCL-' + clk ,
+              showlegend: false,
+              line: {
+                color: 'red',
+                width: 1,
+                dash: 'dash'
+              }
+            };
+            traces[datasets.length + groupNo -1 + all_clk.length] = UCL;
+            groupNo ++;
+        });
+        
+        Plotly.plot(boxPlot, traces,  layout, {showSendToCloud: true});
+        
+        boxPlot.on('plotly_legendclick', function(clickData){
+            //console.log(clickData.layout);
+            return false;
+        });
+        //console.log(layout);
+        var calcData = boxPlot.calcdata;
+        
+        console.log("box cal data as below:");
+        console.log(calcData);
+        
+        // assign the row value
+        var rows = [];
+        
+        
+        var values = [];
+        values[0] = ['Count', 'Min', 'Mean', 'Max', 'StdDev'];
+        
+        no = 0;
+        calcData.forEach(function(data){
+            if(no < datasets.length){
+                var Count = data[0].pts.length;
+                var Min = data[0].min.toFixed(2);
+                var Mean =data[0].mean.toFixed(2);
+                var Max =data[0].med.toFixed(2);
+                var StdDev = data[0].sd.toFixed(2);
+                var boxData = [Count, Min, Mean, Max, StdDev];
+                values[values.length] = boxData;
+            }
+            no ++;
+        });
+        
+        no = 0;
+        for(;no < values[0].length; no ++){
+            let colNo = 0;
+            var row = [];
+            for(;colNo != values.length; colNo ++){
+                row[colNo] = values[colNo][no];
+            }
+            rows[no] = row;
+        }
+        //console.log("rows value: ");
+        //console.log(rows);
+        
+        /*
+        datasets.forEach(function(data){
+            var Count = 25;
+            var Min = data.min;
+            var Mean =data.mean;
+            var Max =data.max;
+            var StdDev = data.sd;
+            var boxData = [Count, Min, Mean, Max, StdDev];
+            values[values.length] = boxData;
+            
+        });
+        
+        var data = [{
+          type: 'table',
+          header: {
+            values: headValues,
+            align: ["left", "center"],
+            line: {width: 1, color: '#506784'},
+            fill: {color: '#119DFF'},
+            font: {family: "Arial", size: 12, color: "white"}
+          },
+          cells: {
+            values: values,
+            align: ["left", "center"],
+            line: {color: "#506784", width: 1},
+        	 fill: {color: ['#25FEFD', 'white']},
+            font: {family: "Arial", size: 11, color: ["#506784"]} 
+          }
+        }];
+        
+        Plotly.plot('table', data, {}, {showSendToCloud: true});
+        console.log(values);
+        */
+    
+        var tbl = dataTable;
+        var tblBody = document.createElement("tbody");
+        var row = document.createElement("tr");
+
+        // header row
+        for(var i = 0 ; i <=  datasets.length; i++){
+            var cell = document.createElement("th");
+            cell.setAttribute("font-size", "19"); 
+            var cellText = document.createTextNode(headValues[i]);
+            cell.appendChild(cellText);
+            row.appendChild(cell);
+        }
+        tblBody.appendChild(row);
+        
+        //value rows
+        rows.forEach(function(data){
+            var row = document.createElement("tr");
+            data.forEach(function(text){
+                var cell = document.createElement("td");
+                var cellText = document.createTextNode(text);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            });
+            tblBody.appendChild(row);
+        });
+        tbl.appendChild(tblBody);
+    }
+})
+
+
+<style type="text/css">
+    table {
+    	background: #f5f5f5;
+    	font-size: 12px;
+    	line-height: 24px;
+    	text-align: middle;
+    }
+    th {
+    	border-left: 1px solid #555;
+    	border-right: 1px solid #777;
+    	border-top: 1px solid #555;
+    	border-bottom: 1px solid #333;
+        font-weight: 510;
+    }
+    td {
+    	border-right: 1px solid #fff;
+    	border-left: 1px solid #e8e8e8;
+    	border-top: 1px solid #fff;
+    	border-bottom: 1px solid #e8e8e8;
+    }
+</style> 
+
+<div id="pcie-1" class="myDiv" style="color:black; text-align:center; margin:0 auto; position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 12px">
+    <div id = 'alert'></div>
+    <div id = "boxplot" style = "float: top; height: 65%" ></div>
+    <table id= "dataTable" width="90%" height= '35%'></table>
+</div>
+
+4: thermal
+
+<style type="text/css">
+    table {
+    	background: #f5f5f5;
+    	font-size: 12px;
+    	line-height: 24px;
+    	text-align: middle;
+    }
+    th {
+    	border-left: 1px solid #555;
+    	border-right: 1px solid #777;
+    	border-top: 1px solid #555;
+    	border-bottom: 1px solid #333;
+        font-weight: 510;
+    }
+    td {
+    	border-right: 1px solid #fff;
+    	border-left: 1px solid #e8e8e8;
+    	border-top: 1px solid #fff;
+    	border-bottom: 1px solid #e8e8e8;
+    }
+</style> 
+
+<div id="pcie-1" class="myDiv" style="color:black; text-align:center; margin:0 auto; position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 12px">
+    <div id = 'alert'></div>
+    <div id = "boxplot" style = "float: top; height: 65%" ></div>
+    <table id= "dataTable" width="90%" height= '35%'></table>
+</div>
+
+
+
+
+
+({
+    /*
+    * please never try edit the js code
+     ****************************************************************
+     *  author: guanghao                                            *
+     *  description: box plot chart                                 *
+     *  the x is defined as the context name, that is the series    *
+     *  the y is defined as the test value, that is the group       *
+     *  limitation: max data size is 10000                          *
+     ****************************************************************
+     * how to edit the Query DSL?
+     * 1) modify the 'Operation' field if needed
+     * 2) modify the 'LotNumber' field to your target lot
+     * 3) modify the 'Type' field if needed
+     * 4) modify the 'Pin' field if needed
+     * 5) filter the test flow context
+     */
+    
+    after_render: function() {
+        //config to group what, temperature(default) or wafer split
+        const valueType = [{name: 'ZValue', enabled: false}, {name: 'Offset', enabled: false}, {name: 'Temp', enabled: true}];
+        const groupBy = {temperature: false, split: true, structure: false, valueType: false, voltage: false};
+        const clusterBy =[{name: 'RDI', enabled: false}, {name:'RDIL', enabled:true},{name:'RDIR', enabled: false}, {name: 'RDI_INT', enabled: false}];
+        var all_cluster = [];
+        var all_legend = [];
+        //configuration for order, choose the sortMetric and only enabled one
+        var asc = true;
+        var sortMetric = {Min: false, Max: false, Mean: false, StdDev: false, Group: true};
+        // configuration what to track, and only enable one metric
+        var tarckMetric = {Min: false, Max: false, Mean: true, StdDev: false};
+        // config the wafer split
+        const waferSplit = [
+            {type: 'FF', value: ["H800B0003", "H800B0005", "M75NF0009", "M75NF0010", "M75NG0003"], index: 0},
+            {type: 'FS', value: ["H800B0011", "M75NG0011", "M75NG0012"], index: 1},
+            {type: 'SF', value: ["H800B0009", "H800B0010", "M75NG0009"], index: 2},
+            {type: 'SS', value: ["H800B0006", "H800C0003", "M75NG0006", "M75NG0007", "M75NG0008"], index: 3},
+            {type: 'TT', value: ["H800B0001", "H800F0002", "H800F0003", "H800F0004", "H800F0008", "H800F0010", "M75NH0003", "M75NH0010"], index: 4},
+        ];
+        
+        // config for test code to temperature
+        var AAQFNE = {temp: 20, index: 0};
+        var AANFNE = {temp: 50, index: 1};
+        var AASFNE = {temp: 90, index: 2};
+        var AATFNE = {temp: 100, index: 3};
+        const testCode = { AAQFNE: AAQFNE, AANFNE: AANFNE, AASFNE: AASFNE, AATFNE: AATFNE};
+        const colors = Plotly.d3.scale.category10();
+        var temperature = [];
+    
+        var myConfigValue = [
+            {V_Search: 'VminSearch', VoltageType: 'VddCrSoc', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'VddioMemS3', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'Vdd18', Value: 0.7, TestPoint: 1.62},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddCrSoc', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddioMemS3', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'Vdd18', Value: 2.0, TestPoint: 1.89}
+        ];
+        //var useDefaultMax = true;
+        var innerContainer= document.getElementById("thermal-1");
+        var alert = innerContainer.children[0];
+        var boxPlot = innerContainer.children[1];
+        var dataTable = innerContainer.children[2];
+        
+        
+        var myCluster = clusterBy.find(function(aCluster){
+                return aCluster.enabled;
+            });
+        var myClusterName = 'RDIL';
+        if(myCluster != null){
+            myClusterName = myCluster.name;
+        }
+
+        var all_data = response.hits.hits.filter(function(hit){
+            let structureName = hit._source.structureName;
+            let skip = false;
+            //console.log("structureName: " + structureName);
+            valueType.forEach(function(type){
+                if(type.enabled === false && skip === false){
+                    if(structureName.indexOf(type.name) >= 0){
+                        skip = true;
+                        //console.log("type: " + type.name + ", skipped");
+                    }
+                }
+            });
+            if(!skip){
+                if(structureName.indexOf(myClusterName) < 0){
+                    skip = true;
+                }
+            }
+            return (!skip);
+        });
+        if(all_data.length === 0){
+            alert.innerHTML += 'Empty Data in this Date Range';
+            return false;
+        }
+        
+        function getLegend(hit){
+            let structureName ='';
+            structureName = hit._source.structureName.split(":")[0];
+            if(structureName.indexOf(myClusterName) >= 0){
+                if(all_cluster.indexOf(structureName) === -1){
+                   all_cluster[all_cluster.length] =  structureName;
+                }
+            }
+            
+            if(groupBy.temperature){
+                let legend = hit._source.TestCode;
+                //already has Temperature
+                legend = hit._source.Temperature;
+                //return {legend: testCode[legend]['temp'], index: testCode[legend]['index']};
+                if(temperature.indexOf(legend) === -1 ){
+                    temperature[temperature.length] = legend;
+                }
+                return {legend: legend, index: temperature.indexOf(legend), cluster: structureName};
+            }
+            else if(groupBy.split){
+                let spliter = waferSplit.find(function(split){
+                    let legend = hit._source.UnitId;
+                    let index = split.value.indexOf(legend.substring(0, 9));
+                    return (index >= 0);
+                });
+                return (spliter != null ? {legend: spliter.type, index: spliter.index, cluster: structureName} : {legend: 'undefined', index: waferSplit.length, cluster: structureName});
+            }
+            else if(groupBy.structure){
+                let legend = hit._source.structureName.split(":")[0];
+                if(temperature.indexOf(legend) === -1 ){
+                    temperature[temperature.length] = legend;
+                }
+                return {legend: legend, index: temperature.indexOf(legend), cluster: structureName};
+            }
+            else if(groupBy.valueType){
+                let legend = hit._source.structureName.split(":")[1];
+                if(temperature.indexOf(legend) === -1 ){
+                    temperature[temperature.length] = legend;
+                }
+                return {legend: legend, index: temperature.indexOf(legend), cluster: structureName};
+            }
+        }
+        
+        // context e.g. gmi_fulltrain_PRBS_3200_Vmin_tck_25MHz_VminSearch_VddCrSoc
+        var context = all_data[0]._source.context;
+        let title = "title";
+        /*
+        let V_Search = context.indexOf('Vmin') === -1 ? 'VmaxSearch': 'VminSearch';
+        let names = context.split('_');
+        let Frequency = names[4];
+        let VoltageType = names[names.length - 1];
+        title = 'V_Search=' + V_Search + ',VoltageType=' + VoltageType + ',Frequency=' + Frequency;
+        
+        var currConfigValue = {Value: 0, TestPoint: 1.2};
+        let configValue = myConfigValue.find(function(config){
+            return config.V_Search == V_Search && config.VoltageType == VoltageType;
+        });
+        if(configValue != null) {
+            currConfigValue = configValue;
+        }
+        console.log("current configuration is as below:");
+        console.log(currConfigValue);
+        */
+        
+        var y = [];
+        var x = [];
+        var text = [];
+        
+        var datasets = [];
+        let no = 0;
+        
+        all_data.forEach(function(hit){
+            // default test code, that is temperature
+            let group = getLegend(hit);
+            let index = group.index;
+            let legend = group.legend;
+            let clusterName = group.cluster;
+            let curr_dataset = datasets.find(function(dataSet){
+               return (dataSet.legend === legend && dataSet.cluster === clusterName);
+            });
+            
+            if (curr_dataset == null) {
+                no = datasets.length;
+                curr_dataset = {legend: legend,  x: [],  y: [] , text: [], cluster: clusterName, index: index};
+                datasets[no] = curr_dataset;
+            }
+            let y = curr_dataset.y;
+            let x = curr_dataset.x;
+            let text = curr_dataset.text;
+            
+            no = y.length;
+            y[no] = hit._source.value;
+            /*
+            if(y[no] == 0.0){
+                y[no] = currConfigValue['Value'];
+            }
+            */
+            text[no] = hit._source.UnitId;
+            x[no] = legend;
+        });
+        
+        all_cluster.sort(function(a, b){
+            if(myClusterName === 'RDI'){
+                return a > b;
+            }
+            else{
+                return (parseInt(a.substring(myClusterName.length, a.length))) > (parseInt(b.substring(myClusterName.length, b.length)));
+            }
+        });
+        console.log("this is all cluster info:");
+        console.log(all_cluster);
+        
+        
+        console.log("all data set in groups as below:");
+        console.log(datasets);
+        let currWidth = innerContainer.offsetWidth;
+        var boxWidth = 50;
+        let width = boxWidth * datasets.length;
+        if(width > currWidth){
+            innerContainer.style.width = (width + 'px');
+        }
+
+        // here start to sort trace by user specified param such as mean, max, min, std, median
+        datasets.forEach(function(dataSet){
+            let min = 0;
+            min = d3.min(dataSet.y, function(d) { return d });
+            let max = 0; 
+            max = d3.max(dataSet.y, function(d) { return d });
+            let mean = 0; 
+            mean = d3.mean(dataSet.y, function(d) { return d });
+            let std = 0; 
+            if(dataSet.length > 1){
+                std = d3.deviation(dataSet.y, function(d) { return d });
+            }
+            let median =0;
+            median = d3.median(dataSet.y, function(d) { return d });
+            console.log('min: ' + min + ", max: " + max + ", mean: " + mean + ", std: " + std + ", median: " + median);
+            
+            dataSet['min'] = min;
+            dataSet['max'] = max;
+            dataSet['mean'] = mean.toFixed(2);
+            dataSet['std'] = std.toFixed(2);
+            dataSet['median'] = median.toFixed(2);
+        });
+    
+        var headValues = [];
+        var table_colors = [];
+        headValues[0] = [''];
+        table_colors[0] = '#25FEFD';
+        var traces = [];
+        no = 0;
+        var groupNo = 1;
+        let groupSize = all_cluster.length;
+        let yTitle = valueType.find(d => (d.enabled)).name;
+        title = myClusterName + " - " + yTitle ;
+        var layout = {
+          title:{text: title, font: {size: 15}},
+          yaxis: {
+            title:  yTitle,
+            zeroline: false,
+            hoverformat: '.2f',
+            //range: [minY, maxY]
+          },
+          //boxmode: 'group'
+        };
+        
+        all_cluster.forEach(function(clk){
+            var curr_clk_group = datasets.filter(function(dataSet){
+               return (dataSet.cluster === clk);
+            });
+            console.log("trace for cluster: " + clk);
+            
+            var xt = 'x' + (groupNo);
+            var xaxis = 'xaxis' + groupNo;
+            
+            let start = no / datasets.length;
+            let end = start + (curr_clk_group.length * 3/4)/datasets.length;
+            layout[xaxis] = {type: "category", domain:[start, end], title: clk};
+            let showLegend = groupNo === 1 ? true : false;
+           
+            // sort current traces here
+            curr_clk_group.sort(function(a, b){
+                if(sortMetric['Min']) {
+                    return asc ? (a.min > b.min) : (a.min < b.min);
+                }
+                else if(sortMetric['Max']){
+                    return asc ? (a.max > b.max) : (a.max < b.max);
+                }
+                else if(sortMetric['Mean']){
+                    return asc ? (a.mean > b.mean) : (a.mean < b.mean);
+                }
+                else if(sortMetric['StdDev']){
+                    return asc ? (a.std > b.std) : (a.std < b.std);
+                }
+                else if(sortMetric['Group']){
+                    return asc ? (a.legend > b.legend) : (a.legend < b.legend);
+                }
+            });
+            var track_x = [];
+            var track_y = [];
+            var ucl_y = [];
+            var track_text = [];
+            
+            curr_clk_group.forEach(function(lot){
+                var tempIndex = lot.index;
+                var color = colors(tempIndex);
+                showLegend = false;
+                if(all_legend.indexOf(lot.legend) === -1) {
+                    showLegend = true;
+                    all_legend[all_legend.length] = lot.legend;
+                    console.log("groupNo = " + groupNo + ", enable the first legend: " + lot.legend);
+                }
+                var boxTrace = {
+                    type: 'box',
+                    y: lot.y,
+                    x: lot.x,
+                    xaxis: xt,
+                    text:lot.text,
+                    name: lot.legend,
+                    showlegend: showLegend,
+                    legendgroup: tempIndex,
+                    //name: testCode[lot.legend]['temp'] + '-' + lot.context.split('_')[lot.context.split('_').length - 3],
+                    
+                    marker: {
+                         color: color,
+                      },
+                      boxpoints: 'all', //'suspectedoutliers', // all
+                      jitter: 1,
+                      boxmean: 'sd', // true
+                      pointpos: '0'
+                    };
+                    traces[no] = boxTrace;
+                    headValues[no + 1] = clk + '-' + lot.legend;
+                    table_colors[no + 1] = color;
+                    track_text[track_text.length] = lot.legend;
+                    no++;
+                    
+                    //ucl_y[ucl_y.length] = currConfigValue['TestPoint'];
+                    track_x[track_x.length] = lot.legend;
+                    if(tarckMetric['Min']) {
+                        track_y[track_y.length] = lot.min;
+                    }
+                    else if(tarckMetric['Max']){
+                        track_y[track_y.length] = lot.max;
+                    }
+                    else if(tarckMetric['Mean']){
+                        track_y[track_y.length] = lot.mean;
+                    }
+                    else if(tarckMetric['StdDev']){
+                        track_y[track_y.length] = lot.std;
+                    }
+                    else{
+                        track_y[track_y.length] = lot.mean;
+                    }
+            });
+            //add tracking lines here
+            var trackTrace = {
+                    type: 'scatter',
+                    y: track_y,
+                    x: track_x,
+                    xaxis: xt,
+                    //text:lot.text,
+                    name: clk ,
+                    text: track_text,
+                    showlegend: false,
+                    line: {
+                        color: 'black',
+                        width: 1
+                    }
+            };
+            traces[datasets.length + groupNo -1 ] = trackTrace;
+            groupNo ++;
+        });
+        console.log("traces info as below: ");
+        console.log(traces);
+        console.log(layout);
+        
+        Plotly.plot(boxPlot, traces,  layout, {showSendToCloud: true});
+        
+        boxPlot.on('plotly_legendclick', function(clickData){
+            //console.log(clickData.layout);
+            return false;
+        });
+        //console.log(layout);
+        var calcData = boxPlot.calcdata;
+        
+        console.log("box cal data as below:");
+        console.log(calcData);
+        
+        // assign the row value
+        var rows = [];
+        
+        
+        var values = [];
+        values[0] = ['Count', 'Min', 'Mean', 'Max', 'StdDev'];
+        
+        no = 0;
+        calcData.forEach(function(data){
+            if(no < datasets.length){
+                var Count = data[0].pts.length;
+                var Min = data[0].min.toFixed(2);
+                var Mean =data[0].mean.toFixed(2);
+                var Max =data[0].med.toFixed(2);
+                var StdDev = data[0].sd.toFixed(2);
+                var boxData = [Count, Min, Mean, Max, StdDev];
+                values[values.length] = boxData;
+            }
+            no ++;
+        });
+        
+        no = 0;
+        for(;no < values[0].length; no ++){
+            let colNo = 0;
+            var row = [];
+            for(;colNo != values.length; colNo ++){
+                row[colNo] = values[colNo][no];
+            }
+            rows[no] = row;
+        }
+        var tbl = dataTable;
+        var tblBody = document.createElement("tbody");
+        var row = document.createElement("tr");
+
+        // header row
+        for(var i = 0 ; i <=  datasets.length; i++){
+            var cell = document.createElement("th");
+            cell.setAttribute("font-size", "19"); 
+            var cellText = document.createTextNode(headValues[i]);
+            cell.appendChild(cellText);
+            row.appendChild(cell);
+        }
+        tblBody.appendChild(row);
+        
+        //value rows
+        rows.forEach(function(data){
+            var row = document.createElement("tr");
+            data.forEach(function(text){
+                var cell = document.createElement("td");
+                var cellText = document.createTextNode(text);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            });
+            tblBody.appendChild(row);
+        });
+        tbl.appendChild(tblBody);
+    }
+})
+<style type="text/css">
+    table {
+    	background: #f5f5f5;
+    	font-size: 12px;
+    	line-height: 24px;
+    	text-align: middle;
+    }
+    th {
+    	border-left: 1px solid #555;
+    	border-right: 1px solid #777;
+    	border-top: 1px solid #555;
+    	border-bottom: 1px solid #333;
+        font-weight: 510;
+    }
+    td {
+    	border-right: 1px solid #fff;
+    	border-left: 1px solid #e8e8e8;
+    	border-top: 1px solid #fff;
+    	border-bottom: 1px solid #e8e8e8;
+    }
+</style> 
+
+<div id="thermal-1" class="myDiv" style="color:black; text-align:center; margin:0 auto; position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 12px">
+    <div id = 'alert'></div>
+    <div id = "boxplot" style = "float: top; height: 65%" ></div>
+    <table id= "dataTable" width="90%" height= '35%'></table>
+</div>
+
+
+5: xgbe
+{
+  "query": {
+    "bool": {
+      "must": [
+        "_DASHBOARD_CONTEXT_",
+        {
+          "term": {
+            "Type": {
+              "value": "Search"
+            }
+          }
+        },
+         {
+          "term": {
+            "baseClass": {
+              "value": "HSIO"
+            }
+          }
+        },
+        {
+          "terms": {
+            "context": [
+              "XgBE_PCS_iNELB_10312_Vmin_78M_VminSearch_VddCrSoc"
+            ]
+          }
+        },
+          {
+          "exists": {
+            "field": "Temperature"
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "context": {
+      "terms": {
+        "field": "context",
+        "size": 20
+      }
+    }
+  }, 
+  "size": 10000,
+  "_source": [
+    "context",
+    "value",
+    "UnitId",
+    "TestCode",
+    "StartTimeStamp",
+    "Temperature"
+  ]
+}
+
+
+
+
+
+({
+    /*
+    * please never try edit the js code
+     ****************************************************************
+     *  author: guanghao                                            *
+     *  description: box plot chart                                 *
+     *  the x is defined as the context name, that is the series    *
+     *  the y is defined as the test value, that is the group       *
+     *  limitation: max data size is 10000                          *
+     ****************************************************************
+     * how to edit the Query DSL?
+     * 1) modify the 'Operation' field if needed
+     * 2) modify the 'LotNumber' field to your target lot
+     * 3) modify the 'Type' field if needed
+     * 4) modify the 'Pin' field if needed
+     * 5) filter the test flow context
+     */
+    
+    after_render: function() {
+        //config to group what, temperature(default) or wafer split
+        const groupBy = {temperature: false, split: true};
+        //configuration for order, choose the sortMetric and only enabled one
+        var asc = true;
+        var sortMetric = {Min: false, Max: false, Mean: false, StdDev: false, Group: true};
+        // configuration what to track, and only enable one metric
+        var tarckMetric = {Min: false, Max: false, Mean: true, StdDev: false};
+        // config the wafer split
+        const waferSplit = [
+            {type: 'FF', value: ["H800B0003", "H800B0005", "M75NF0009", "M75NF0010", "M75NG0003"], index: 0},
+            {type: 'FS', value: ["H800B0011", "M75NG0011", "M75NG0012"], index: 1},
+            {type: 'SF', value: ["H800B0009", "H800B0010", "M75NG0009"], index: 2},
+            {type: 'SS', value: ["H800B0006", "H800C0003", "M75NG0006", "M75NG0007", "M75NG0008"], index: 3},
+            {type: 'TT', value: ["H800B0001", "H800F0002", "H800F0003", "H800F0004", "H800F0008", "H800F0010", "M75NH0003", "M75NH0010"], index: 4},
+        ];
+        
+        // config for test code to temperature
+        var AAQFNE = {temp: 20, index: 0};
+        var AANFNE = {temp: 50, index: 1};
+        var AASFNE = {temp: 90, index: 2};
+        var AATFNE = {temp: 100, index: 3};
+        const testCode = { AAQFNE: AAQFNE, AANFNE: AANFNE, AASFNE: AASFNE, AATFNE: AATFNE};
+        const colors = Plotly.d3.scale.category10();
+        var temperature = [];
+        var all_legend = [];
+        var myConfigValue = [
+            {V_Search: 'VminSearch', VoltageType: 'VddCrSoc', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'VddioMemS3', Value: 0.5, TestPoint: 0.83},
+            {V_Search: 'VminSearch', VoltageType: 'Vdd18', Value: 0.7, TestPoint: 1.62},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddCrSoc', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'VddioMemS3', Value: 1.2, TestPoint: 0.98},
+            {V_Search: 'VmaxSearch', VoltageType: 'Vdd18', Value: 2.0, TestPoint: 1.89}
+        ];
+        //var useDefaultMax = true;
+        var a= document.getElementById("xgbe-1");
+        var alert = a.children[0];
+        var boxPlot = a.children[1];
+        var dataTable = a.children[2];
+        
+        var all_data = response.hits.hits;
+        if(all_data.length === 0){
+            alert.innerHTML += 'Empty Data in this Date Range';
+            return false;
+        }
+        
+        function getLegend(hit){
+            if(groupBy.temperature){
+                let legend = hit._source.TestCode;
+                //already has Temperature
+                legend = hit._source.Temperature;
+                //return {legend: testCode[legend]['temp'], index: testCode[legend]['index']};
+                if(temperature.indexOf(legend) === -1 ){
+                    temperature[temperature.length] = legend;
+                }
+                return {legend: legend, index: temperature.indexOf(legend)};
+            }
+            else{
+                let spliter = waferSplit.find(function(split){
+                    let legend = hit._source.UnitId;
+                    let index = split.value.indexOf(legend.substring(0, 9));
+                    console.log("unitID: " + legend + ", index: " + index);
+                    return (index >= 0);
+                });
+                return (spliter != null ? {legend: spliter.type, index: spliter.index} : {legend: 'undefined', index: waferSplit.length});
+            }
+        }
+        
+        // context e.g. gmi_fulltrain_PRBS_3200_Vmin_tck_25MHz_VminSearch_VddCrSoc
+        var context = all_data[0]._source.context;
+        
+        let V_Search = context.indexOf('Vmin') === -1 ? 'VmaxSearch': 'VminSearch';
+        let names = context.split('_');
+        let Frequency = names[3];
+        let VoltageType = names[names.length - 1];
+        let title = 'V_Search=' + V_Search + ',VoltageType=' + VoltageType + ',Frequency=' + Frequency;
+        
+        var currConfigValue = {Value: 0, TestPoint: 1.2};
+        let configValue = myConfigValue.find(function(config){
+            return config.V_Search == V_Search && config.VoltageType == VoltageType;
+        });
+        if(configValue != null) {
+            currConfigValue = configValue;
+        }
+        console.log("current configuration is as below:");
+        console.log(currConfigValue);
+
+        var y = [];
+        var x = [];
+        var text = [];
+        
+        var datasets = [];
+        let no = 0;
+        
+        // aggs clk speed
+        var all_context = response.aggregations.context.buckets;
+        var all_clk = [];
+        
+        all_context.forEach(function(bucket){
+            let context = bucket.key;
+            let  names = context.split('_');
+            let clkSpeed = names[3];
+            if(all_clk.indexOf(clkSpeed) === -1){
+                all_clk[all_clk.length] = clkSpeed;
+            }
+        });
+        //console.log('all_clk:'+ all_clk);
+        all_clk.sort();
+        
+        all_data.forEach(function(hit){
+            // default test code, that is temperature
+            let group = getLegend(hit);
+            let index = group.index;
+            let legend = group.legend;
+            let context = hit._source.context;
+            let curr_dataset = datasets.find(function(dataSet){
+               return (dataSet.legend === legend && dataSet.context === context);
+            });
+            
+            if (curr_dataset == null) {
+                no = datasets.length;
+                curr_dataset = {legend: legend,  x: [],  y: [] , text: [], context: context, index: index};
+                datasets[no] = curr_dataset;
+            }
+            let y = curr_dataset.y;
+            let x = curr_dataset.x;
+            let text = curr_dataset.text;
+            
+            no = y.length;
+            y[no] = hit._source.value;
+            //console.log("value = " + y[no]);
+            if(y[no] == 0.0){
+                y[no] = currConfigValue['Value'];
+                //console.log("value 0 is replaced with " + y[no]);
+            }
+            text[no] = hit._source.UnitId;
+            //replace the context here
+            let names = context.split('_');
+            x[no] = legend;
+        });
+        
+        let minY = 1000;
+        let maxY = -1000;
+        // here start to sort trace by user specified param such as mean, max, min, std, median
+        datasets.forEach(function(dataSet){
+            let min = d3.min(dataSet.y, function(d) { return d });
+            let max = d3.max(dataSet.y, function(d) { return d });
+            let mean = d3.mean(dataSet.y, function(d) { return d });
+            let std = 0;
+            if(dataSet.length > 1){
+                std = d3.deviation(dataSet.y, function(d) { return d });
+            }
+            let median = d3.median(dataSet.y, function(d) { return d });
+            dataSet['min'] = min;
+            dataSet['max'] = max;
+            minY = minY > min ? min: minY;
+            maxY = maxY > max ? maxY : max; 
+            dataSet['mean'] = mean.toFixed(2);
+            dataSet['std'] = std.toFixed(2);
+            dataSet['median'] = median.toFixed(2);
+            //console.log('min: ' + min + ", max: " + max + ", mean: " + mean + ", std: " + std + ", median: " + median);
+            
+        });
+        
+        maxY = maxY > currConfigValue.TestPoint ? maxY : currConfigValue.TestPoint;
+        maxY = (maxY + 0.05).toFixed(1);
+        minY = (minY - 0.05).toFixed(1);
+        console.log("all data set in groups as below:");
+        console.log(datasets);
+        var headValues = [];
+        var table_colors = [];
+        headValues[0] = [''];
+        table_colors[0] = '#25FEFD';
+        var traces = [];
+        no = 0;
+        var groupNo = 1;
+        let groupSize = all_clk.length;
+        
+        
+        var layout = {
+          title:{text: title, font: {size: 15}},
+          yaxis: {
+            title: 'value',
+            zeroline: false,
+            hoverformat: '.2f',
+            range: [minY, maxY]
+          },
+          //boxmode: 'group'
+        };
+        all_clk.forEach(function(clk){
+            var curr_clk_group = datasets.filter(function(dataSet){
+               return (dataSet.context.indexOf(clk) != -1);
+            });
+            //console.log(clk);
+            //console.log(curr_clk_group);
+            
+            var xt = 'x' + (groupNo);
+            var xaxis = 'xaxis' + groupNo;
+            
+            let start = (groupNo - 1)/ groupSize;
+            let end = groupNo/groupSize - (groupSize ===  1 ? 0 : 1/10);
+            layout[xaxis] = {type: "category", domain:[start, end], title: clk};
+            let showLegend = groupNo === 1 ? true : false;
+            
+            // sort current traces here
+            
+            curr_clk_group.sort(function(a, b){
+                if(sortMetric['Min']) {
+                    return asc ? (a.min > b.min) : (a.min < b.min);
+                }
+                else if(sortMetric['Max']){
+                    return asc ? (a.max > b.max) : (a.max < b.max);
+                }
+                else if(sortMetric['Mean']){
+                    return asc ? (a.mean > b.mean) : (a.mean < b.mean);
+                }
+                else if(sortMetric['StdDev']){
+                    return asc ? (a.std > b.std) : (a.std < b.std);
+                }
+                else if(sortMetric['Group']){
+                    return asc ? (a.legend > b.legend) : (a.legend < b.legend);
+                }
+            });
+            var track_x = [];
+            var track_y = [];
+            var ucl_y = [];
+            var track_text = [];
+            
+            curr_clk_group.forEach(function(lot){
+                var tempIndex = lot.index;
+                var color = colors(tempIndex);
+                showLegend = false;
+                if(all_legend.indexOf(lot.legend) === -1){
+                    showLegend = true;
+                    all_legend[all_legend.length] = lot.legend;
+                }
+                
+                var trace = {
+                    type: 'box',
+                    y: lot.y,
+                    x: lot.x,
+                    xaxis: xt,
+                    text:lot.text,
+                    name: lot.legend,
+                    showlegend: showLegend,
+                    legendgroup: tempIndex,
+                    //name: testCode[lot.legend]['temp'] + '-' + lot.context.split('_')[lot.context.split('_').length - 3],
+                    
+                    marker: {
+                         color: color,
+                        //   outliercolor: 'rgba(219, 64, 82, 0.6)',
+                        //   line: {
+                        //     outliercolor: 'rgba(219, 64, 82, 1.0)',
+                        //     outlierwidth: 2
+                        //   },
+                      },
+                      boxpoints: 'all', //'suspectedoutliers', // all
+                      jitter: 1,
+                      boxmean: 'sd', // true
+                      pointpos: '0'
+                    };
+                    traces[no] = trace;
+                    headValues[no + 1] = clk + '-' + lot.legend;
+                    table_colors[no + 1] = color;
+                    track_text[track_text.length] = lot.legend;
+                    no++;
+                    
+                    ucl_y[ucl_y.length] = currConfigValue['TestPoint'];
+                    track_x[track_x.length] = lot.legend;
+                    if(tarckMetric['Min']) {
+                        track_y[track_y.length] = lot.min;
+                    }
+                    else if(tarckMetric['Max']){
+                        track_y[track_y.length] = lot.max;
+                    }
+                    else if(tarckMetric['Mean']){
+                        track_y[track_y.length] = lot.mean;
+                    }
+                    else if(tarckMetric['StdDev']){
+                        track_y[track_y.length] = lot.std;
+                    }
+                    else{
+                        track_y[track_y.length] = lot.mean;
+                    }
+            });
+            //add tracking lines here
+            var trace = {
+                    type: 'scatter',
+                    y: track_y,
+                    x: track_x,
+                    xaxis: xt,
+                    //text:lot.text,
+                    name: clk ,
+                    text: track_text,
+                    showlegend: false,
+                    line: {
+                        color: 'black',
+                        width: 1
+                    }
+            };
+            traces[datasets.length + groupNo -1 ] = trace;
+            
+            // add the ucl lines
+            var UCL = {
+              type: 'scatter',
+              x: track_x,
+              y: ucl_y,
+              xaxis: xt,
+              mode: 'lines',
+              name: 'UCL-' + clk ,
+              showlegend: false,
+              line: {
+                color: 'red',
+                width: 1,
+                dash: 'dash'
+              }
+            };
+            traces[datasets.length + groupNo -1 + all_clk.length] = UCL;
+            groupNo ++;
+        });
+        
+        Plotly.plot(boxPlot, traces,  layout, {showSendToCloud: true});
+        
+        boxPlot.on('plotly_legendclick', function(clickData){
+            //console.log(clickData.layout);
+            return false;
+        });
+        //console.log(layout);
+        var calcData = boxPlot.calcdata;
+        
+        console.log("box cal data as below:");
+        console.log(calcData);
+        
+        // assign the row value
+        var rows = [];
+        
+        
+        var values = [];
+        values[0] = ['Count', 'Min', 'Mean', 'Max', 'StdDev'];
+        
+        no = 0;
+        calcData.forEach(function(data){
+            if(no < datasets.length){
+                var Count = data[0].pts.length;
+                var Min = data[0].min.toFixed(2);
+                var Mean =data[0].mean.toFixed(2);
+                var Max =data[0].med.toFixed(2);
+                var StdDev = data[0].sd.toFixed(2);
+                var boxData = [Count, Min, Mean, Max, StdDev];
+                values[values.length] = boxData;
+            }
+            no ++;
+        });
+        
+        no = 0;
+        for(;no < values[0].length; no ++){
+            let colNo = 0;
+            var row = [];
+            for(;colNo != values.length; colNo ++){
+                row[colNo] = values[colNo][no];
+            }
+            rows[no] = row;
+        }
+        //console.log("rows value: ");
+        //console.log(rows);
+        
+        /*
+        datasets.forEach(function(data){
+            var Count = 25;
+            var Min = data.min;
+            var Mean =data.mean;
+            var Max =data.max;
+            var StdDev = data.sd;
+            var boxData = [Count, Min, Mean, Max, StdDev];
+            values[values.length] = boxData;
+            
+        });
+        
+        var data = [{
+          type: 'table',
+          header: {
+            values: headValues,
+            align: ["left", "center"],
+            line: {width: 1, color: '#506784'},
+            fill: {color: '#119DFF'},
+            font: {family: "Arial", size: 12, color: "white"}
+          },
+          cells: {
+            values: values,
+            align: ["left", "center"],
+            line: {color: "#506784", width: 1},
+        	 fill: {color: ['#25FEFD', 'white']},
+            font: {family: "Arial", size: 11, color: ["#506784"]} 
+          }
+        }];
+        
+        Plotly.plot('table', data, {}, {showSendToCloud: true});
+        console.log(values);
+        */
+        var tbl = dataTable;
+        var tblBody = document.createElement("tbody");
+        var row = document.createElement("tr");
+
+        // header row
+        for(var i = 0 ; i <=  datasets.length; i++){
+            var cell = document.createElement("th");
+            cell.setAttribute("font-size", "19"); 
+            var cellText = document.createTextNode(headValues[i]);
+            cell.appendChild(cellText);
+            row.appendChild(cell);
+        }
+        tblBody.appendChild(row);
+        
+        //value rows
+        rows.forEach(function(data){
+            var row = document.createElement("tr");
+            data.forEach(function(text){
+                var cell = document.createElement("td");
+                var cellText = document.createTextNode(text);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            });
+            tblBody.appendChild(row);
+        });
+        tbl.appendChild(tblBody);
+    }
+})
+
+<style type="text/css">
+    table {
+    	background: #f5f5f5;
+    	font-size: 12px;
+    	line-height: 24px;
+    	text-align: middle;
+    }
+    th {
+    	border-left: 1px solid #555;
+    	border-right: 1px solid #777;
+    	border-top: 1px solid #555;
+    	border-bottom: 1px solid #333;
+        font-weight: 510;
+    }
+    td {
+    	border-right: 1px solid #fff;
+    	border-left: 1px solid #e8e8e8;
+    	border-top: 1px solid #fff;
+    	border-bottom: 1px solid #e8e8e8;
+    }
+</style> 
+
+<div id="xgbe-1" class="myDiv" style="color:black; text-align:center; margin:0 auto; position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 12px">
+    <div id = 'alert'></div>
+    <div id = "boxplot" style = "float: top; height: 65%" ></div>
+    <table id= "dataTable" width="90%" height= '35%'></table>
+</div>
+
+
