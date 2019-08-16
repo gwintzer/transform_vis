@@ -1,0 +1,615 @@
+sample 1:
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "Operation": {
+              "value": "FT"
+            }
+          }
+        },
+        {
+          "terms": {
+            "LotNumber": [
+              "HG50212",
+              "HG50215"
+            ]
+          }
+        },
+        {
+          "term": {
+            "Type": {
+              "value": "PinMeasure"
+            }
+          }
+        },
+        {
+          "term": {
+            "Pin": {
+              "value": "S_VDDCR_SOC"
+            }
+          }
+        }
+      ],
+      "filter": {
+        "terms": {
+          "context": [
+            "Sidd_VddCrSoc_V1",
+            "Sidd_VddCrSoc_V3"
+          ]
+        }
+      }
+    }
+  },
+  "size": 0,
+  "aggs": {
+    "LotNumber": {
+      "terms": {
+        "field": "LotNumber",
+        "size": 2
+      },
+      "aggs": {
+        "UnitId": {
+          "terms": {
+            "field": "UnitId",
+            "size": 5000
+          },
+          "aggs": {
+            "TestName": {
+              "terms": {
+                "field": "context"
+              },
+              "aggs": {
+                "Avg": {
+                  "avg": {
+                    "field": "value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Helper":{
+      "terms": {
+        "field": "context",
+        "size": 10
+      },
+      "aggs": {
+        "max": {
+          "max": {
+            "field": "value"
+          }
+        },
+        "min":{
+          "min": {
+            "field": "value"
+          }
+          
+        }
+      }
+      
+    }
+
+    
+  }
+}
+
+({
+    
+    // This is to install external script/library
+    import_funnelLib: function() {
+        // $.getScript("https://canvasjs.com/assets/script/jquery.canvasjs.min.js", function( data, textStatus, jqxhr ) {
+        //    console.log("Import Complete");
+        //}); 
+    },
+ 
+   after_render: function() {
+    
+    var panelWidth = 800;
+    var panelHeight = 600;
+    
+    
+    var ob = document.getElementById("viz");
+    if(ob !== null){
+        panelHeight = ob.offsetHeight - 50; 
+        panelWidth = ob.offsetWidth - 50;
+        console.log("height = " + panelHeight);
+        console.log("widht = " + panelWidth);
+    }
+   
+    var svgViewport = d3.select("#viz")
+        .append("svg")
+        .attr("width",panelWidth)
+        .attr("height",panelHeight);
+
+    var margin = {top: 80, right: 50, bottom: 50, left: 75},
+        width  = panelWidth - margin.left - margin.right,           
+        height = panelHeight - margin.top  - margin.bottom;
+        
+        console.log("svg width = " + width);
+        console.log("sg height = " + height);
+
+    var innerSpace = svgViewport.append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    
+    // define the data
+    var all_data = response.aggregations.LotNumber.buckets;
+    var lot_data_0 = response.aggregations.LotNumber.buckets[0].UnitId.buckets;
+    var lot_data_1 = response.aggregations.LotNumber.buckets[1].UnitId.buckets;
+    
+    var a = lot_data_0;
+    var b = lot_data_1;
+    
+    var minX = 0;
+    var minY = 0;
+    var maxX = 0;
+    var maxY = 0;
+    
+    
+    minX = response.aggregations.Helper.buckets[0].min.value;
+    maxX = response.aggregations.Helper.buckets[0].max.value;
+    
+    minY = response.aggregations.Helper.buckets[1].min.value;
+    maxY = response.aggregations.Helper.buckets[1].max.value;
+   
+    console.log("minX = " + minX);
+    console.log("maxX = " + maxX);
+   
+    console.log("minY = " + minY);
+    console.log("maxY = " + maxY);  
+   
+    // color 
+    //var colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+    var color = d3.scale.linear().domain([1,3])
+      .interpolate(d3.interpolateHcl)
+      .range([d3.rgb("#007AFF"), d3.rgb('#FFF500')]);
+    
+    color = d3.scale.linear()
+        .domain([0, all_data.length])
+        .range(["red", "green"]);
+    color = d3.scale.category10(); 
+    console.log(d3.scale.category10().length);
+    
+    // 1) change the scale
+    var xAxisScale = d3.scale.linear()
+        .domain([minX, maxX])
+        .range( [0, width])
+        .nice();
+    
+    var yAxisScale = d3.scale.linear()
+    .domain([minY, maxY])
+    .range( [height, 0])
+    .nice();
+        
+    // 2) redefine the axis
+   
+    var myXAxis = d3.svg.axis().scale(xAxisScale).orient("bottom");
+    var myYAxis = d3.svg.axis().scale(yAxisScale).orient("left");
+    
+    // 3) redraw the axis
+    var axisXGroup = innerSpace.append("g")
+    .attr("class", "x axis")
+    .attr("transform", "translate(0," + height + ")")
+    .call(myXAxis);
+    
+    var axisYGroup = innerSpace.append("g")
+    .attr("class", "y axis")
+    .call(myYAxis);
+    
+    
+    // plot
+
+    var self = innerSpace;
+    //enter() for <g>
+    innerSpace.selectAll(".lot")
+        .data(all_data)
+        .enter()
+        .append("g")
+        .attr("class", function(d, i){
+         return all_data[i].key;
+        })
+        .classed("lot", true)
+        .style("opacity", 0.3);
+  
+    //update for <g>
+    innerSpace.selectAll(".lot")
+        .style("fill", function(d,i){
+            return color(i);
+        })
+        .on("mouseover", function(d,i){
+            d3.select(this)
+                .transition()
+                .style("opacity",1);
+        })
+        .on("mouseout", function(d,i){
+            d3.select(this)
+                .transition()
+                .style("opacity",0.3);
+      })
+      
+      //exit() for <g>
+      
+      innerSpace.selectAll(".lot")
+        .data(all_data)
+        .exit()
+        .remove();
+        
+    all_data.forEach(function(lot){
+        var g = self.selectAll("g." + lot.key);
+        var data = lot.UnitId.buckets.filter(function (d){
+            return d.TestName.buckets.length === 2;
+            
+        });
+        
+        g.selectAll(".data")
+            .data(data)
+            .enter()
+            .append("circle")
+            .classed("response", true)
+        
+        //update
+        g.selectAll(".response")
+            .attr("r", function(d, i){
+                return 3 ;
+            })
+            .attr("cx", function(d, i){
+                return xAxisScale(data[i].TestName.buckets[0].Avg.value);
+            })
+            .attr("cy",  function(d, i){
+                return yAxisScale(data[i].TestName.buckets[1].Avg.value);
+            })
+            .on("mouseover", function(d,i){
+                var str = "LotNumber = " + lot.key + ", "
+                + "UnitID = " +  data[i].key + ", "
+                
+                //+ data[i].TestName.buckets[0].key + " = " + data[i].TestName.buckets[0].Avg.value + ", "
+                //+ data[i].TestName.buckets[1].key + " = " + data[i].TestName.buckets[1].Avg.value
+                
+                + "x = " + data[i].TestName.buckets[0].Avg.value + ", "
+                + "y = " + data[i].TestName.buckets[1].Avg.value
+                
+                ;
+                d3.select(".chart-header").text(str);
+                d3.select(this)
+                  .attr("r", 8);
+            })
+            .on("mouseout", function(d,i){
+                d3.select(".chart-header").text("");
+                d3.select(this)
+                  .attr("r", 3);
+            })
+        //exit()
+        g.selectAll(".response")
+          .data(data)
+          .exit()
+          .remove();
+    }),
+    
+    innerSpace.append("text")
+      .attr("transform", "translate(0,-10)")
+      .text("")
+      .classed("chart-header", true)
+      .attr("x", 50)
+      .attr("y", -10);
+    
+    innerSpace.select(".x.axis")
+      .append("text")
+      .classed("x axis-label", true)
+      .attr("transform","translate("+ width/2  + ",48)")
+      .style("fill","black")
+      .text(response.aggregations.Helper.buckets[0].key);
+    
+    innerSpace.select(".y.axis")
+      .append("text")
+      .classed("y axis-label",true)
+      .style("fill","black")
+      .attr("transform","translate(" + -56 + "," + height/2 + ") rotate(-90)")
+      .text(response.aggregations.Helper.buckets[1].key);
+    
+  },
+  count_hits: function() {
+  return this.response.hits.hits.length;
+ },
+ count_aggs: function() {
+     var a  = response.aggregations.UnitId.buckets;
+     return a[0].TestName.buckets[0].Avg.value;
+ },
+  all_aggs: function() {
+     var a = this.response.aggregations.UnitId.buckets;
+     return a;
+ },
+ debug: function() {
+  return JSON.stringify(this, null, ' ');
+ } 
+})
+
+
+<div id="viz" style="color:blue; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    
+</div>
+
+
+<!--This imports the library so that D3 can be used-->
+{{meta.import_funnelLib}}
+
+
+sample 2:
+
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "Operation": {
+              "value": "FT"
+            }
+          }
+        },
+        {
+          "terms": {
+            "LotNumber": [
+              "HG50212",
+              "HG50215"
+            ]
+          }
+        },
+        {
+          "term": {
+            "Type": {
+              "value": "PinMeasure"
+            }
+          }
+        },
+        {
+          "term": {
+            "Pin": {
+              "value": "S_VDDCR_SOC"
+            }
+          }
+        }
+      ],
+      "filter": {
+        "terms": {
+          "context": [
+            "Sidd_VddCrSoc_V1",
+            "Sidd_VddCrSoc_V3"
+          ]
+        }
+      }
+    }
+  },
+  "size": 0,
+  "aggs": {
+    "LotNumber": {
+      "terms": {
+        "field": "LotNumber",
+        "size": 2
+      },
+      "aggs": {
+        "UnitId": {
+          "terms": {
+            "field": "UnitId",
+            "size": 5000
+          },
+          "aggs": {
+            "TestName": {
+              "terms": {
+                "field": "context"
+              },
+              "aggs": {
+                "Avg": {
+                  "avg": {
+                    "field": "value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Helper":{
+      "terms": {
+        "field": "context",
+        "size": 10
+      },
+      "aggs": {
+        "max": {
+          "max": {
+            "field": "value"
+          }
+        },
+        "min":{
+          "min": {
+            "field": "value"
+          }
+          
+        }
+      }
+      
+    }
+
+    
+  }
+}
+
+
+({
+   after_render: function() {
+       var innerContainer = document.getElementById('viz');
+       var symbolSelector = innerContainer.querySelector('.symbolData');
+       var colorSelector = innerContainer.querySelector('.colorsData');
+       var sizeSelector = innerContainer.querySelector('.sizeData');
+        
+       function add_option (){
+            var listofSymbos = ["diamond-open", "circle-open", "diamond", "circle-dot", "circle", "square-open", "square", "triangle-up-dot", "triangle-up-open-dot", "triangle-left-dot", "pentagon-dot", "hexagon-open",  "star-triangle-up-open-dot","hourglass-open","star-diamond-open-dot"];
+            
+            for (var i = 0; i < listofSymbos.length;  i++) {
+                var currentOption = document.createElement('option');
+                currentOption.text = listofSymbos[i];
+               symbolSelector.appendChild(currentOption);
+            }
+            function updatesymbol(){
+              console.log(symbolSelector.value);
+            }
+            symbolSelector.addEventListener('change', updatesymbol, false); 
+       }
+       
+        add_option();
+    
+    
+    // define the data
+    var all_data = response.aggregations.LotNumber.buckets;
+    var lot_data_0 = response.aggregations.LotNumber.buckets[0].UnitId.buckets;
+    var lot_data_1 = response.aggregations.LotNumber.buckets[1].UnitId.buckets;
+    
+    var a = lot_data_0;
+    var b = lot_data_1;
+    
+    var minX = 0;
+    var minY = 0;
+    var maxX = 0;
+    var maxY = 0;
+    
+    
+    minX = response.aggregations.Helper.buckets[0].min.value;
+    maxX = response.aggregations.Helper.buckets[0].max.value;
+    
+    minY = response.aggregations.Helper.buckets[1].min.value;
+    maxY = response.aggregations.Helper.buckets[1].max.value;
+   /*
+    console.log("minX = " + minX);
+    console.log("maxX = " + maxX);
+   
+    console.log("minY = " + minY);
+    console.log("maxY = " + maxY);  
+    */
+   
+
+    let lotno = 0;
+    var traces = [];
+    
+    all_data.forEach(function(lot){
+        var data = lot.UnitId.buckets.filter(function (d){
+            return d.TestName.buckets.length === 2;
+        });
+        var lotNumber = lot.key;
+        
+        var x = [];
+        var y =[];
+        var unitid = [];
+        
+        let i = 0;
+        data.forEach(function(unit){
+            x[i] = unit.TestName.buckets[0].Avg.value;
+            y[i] = unit.TestName.buckets[1].Avg.value;
+            unitid[i] = unit.key;
+            i++;
+        });
+        var trace = {
+          x: x,
+          y: y,
+          mode: 'markers',
+          type: 'scatter',
+          name: lotNumber,
+          text: unitid,
+          marker: {size: 12, symbol: symbolSelector[lotno].innerText}
+        };
+        traces[lotno] = trace;
+        lotno ++;
+        
+    })
+    
+    var layout = { 
+          hovermode:'closest',
+          xaxis: {
+            title: response.aggregations.Helper.buckets[0].key
+          },
+          yaxis: {
+            title: response.aggregations.Helper.buckets[1].key
+          },
+          
+          title: ''
+        };
+
+    Plotly.newPlot('viz', traces, layout, {showSendToCloud: true});
+    
+    innerContainer.on('plotly_click', function(data){
+      //alert('You clicked this Plotly chart!');
+      var pn='',
+          tn='',
+          colors=[];
+      for(var i=0; i < data.points.length; i++){
+        //pn = data.points[i].pointNumber;
+        tn = data.points[i].curveNumber;
+        //colors = data.points[i].data.marker.color;
+        //console.log("i = " + i);
+      }
+      console.log(symbolSelector);
+      
+      //colors = '#C54C82';
+        
+      var update = {'marker':{color: colorSelector.value.split(":")[1], size:sizeSelector.value, symbol: symbolSelector.value}};
+      Plotly.restyle('viz', update, [tn]);
+    });
+    innerContainer.on('plotly_restyle', function(data){
+      //console.log(data);
+    });
+  },
+  
+ count_hits: function() {
+  return this.response.hits.hits.length;
+ },
+ count_aggs: function() {
+     var a  = response.aggregations.UnitId.buckets;
+     return a[0].TestName.buckets[0].Avg.value;
+ },
+  all_aggs: function() {
+     var a = this.response.aggregations.UnitId.buckets;
+     return a;
+ },
+ debug: function() {
+  return JSON.stringify(this, null, ' ');
+ } 
+})
+
+
+
+<div id="viz" style="color:black; text-align:center; margin:0 auto;position: absolute;bottom: 0;top: 0; left:0; right: 0; font-size: 15px">
+    <div class="control-row" style = "float: left">
+        Country: <select class="symbolData">
+        </select>
+    </div>
+    <div class="control-row" style = "float: right">
+        Color: <select class="colorsData">
+            <option>Red:#FF0000</option>
+            <option>Green:#008000</option>
+            <option>Yellow:#FFFF00</option>
+            <option>Pink:#FFC0CB</option>
+            <option>Brown:#A52A2A</option>
+            <option>Blue:#0000FF</option>
+            <option>Grey:#808080</option>
+            <option>Orange:#FFA500</option>
+            <option>SkyBlue:#87CEEB</option>
+        </select>
+    </div>
+    <div class="control-row" style = "float: auto">
+        Size: <select class="sizeData">
+            <option>10</option>
+            <option>12</option>
+            <option>14</option>
+            <option>16</option>
+            <option>8</option>
+             
+        </select>
+    </div>
+</div>
+
+
+<!--This imports the library so that D3 can be used-->
+{{ meta.add_option }}
