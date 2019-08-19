@@ -1,5 +1,6 @@
 import { VisTypesRegistryProvider } from 'ui/registry/vis_types';
 import { VisFactoryProvider } from 'ui/vis/vis_factory';
+import { prepareJson } from 'ui/visualize/loader/pipeline_helpers/build_pipeline';
 import { DefaultEditorSize } from 'ui/vis/editor_size';
 import { Status } from 'ui/vis/update_status';
 import React, { Component } from 'react';
@@ -16,6 +17,7 @@ function TransformVisProvider(Private) {
   return VisFactory.createReactVisualization({
     name: 'transform',
     title: 'Transform',
+    toExpression: (vis) => `transform_vis ${prepareJson('visConfig', vis.getCurrentState().params)} visTitle='${vis.title}'`,
     description: 'Transfom query results to custom HTML using template language',
     icon: 'editorCodeBlock',
     visConfig: {

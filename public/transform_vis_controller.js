@@ -22,6 +22,9 @@ class TransformVisComponent extends Component {
           vis: this.props.vis,
           es: this.props.es,
           context: this.props.context,
+          timeRange: this.props.timeRange,
+          timefilter: this.props.timefilter,
+          visTitle: this.props.visTitle,
           meta: this.props.meta,
           saveAs,
         })();
@@ -52,6 +55,9 @@ export function TransformVisWrapper(props) {
       meta={props.visData.meta}
       es={props.visData.es}
       context={props.visData.context}
+      timefilter={props.visData.timefilter}
+      timeRange={props.visData.timeRange}
+      visTitle={props.visData.visTitle}
     />
   );
 }

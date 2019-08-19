@@ -6,9 +6,8 @@ export default kibana => new kibana.Plugin({
   name: 'transform_vis',
 
   uiExports: {
-    visTypes: [
-      'plugins/transform_vis/transform_vis'
-    ],
+    visTypes: ['plugins/transform_vis/transform_vis'],
+    interpreter: ['plugins/transform_vis/transform_vis_fn'],
     injectDefaultVars: server => ({ transformVisOptions: server.config().get('transform_vis') }),
     styleSheetPaths: resolve(__dirname, 'public/index.scss'),
   },

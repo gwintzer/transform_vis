@@ -1,16 +1,16 @@
 import chrome from 'ui/chrome';
-import { BuildESQueryProvider } from '@kbn/es-query'
+import { timefilter } from 'ui/timefilter'
+import { buildEsQuery, getEsQueryConfig } from '@kbn/es-query';
 import { transform } from '@babel/standalone';
 
 const Mustache = require('mustache');
 
 const babelTransform = (code) => transform(code, { presets: ['es2015'], plugins: ['transform-async-to-generator'] }).code;
 
-export function RequestHandlerProvider (Private, es) {
+export function RequestHandlerProvider (es, config) {
 
-  const myRequestHandler = function ({ timeRange, filters, query, queryFilter, searchSource, visParams }) {
+  const myRequestHandler = function ({ timeRange, filters, query, visParams, visTitle }) {
 
-    const buildEsQuery = Private(BuildESQueryProvider);
     const options = chrome.getInjected('transformVisOptions');
 
     const display_error = (displayMessage, consoleMessage, error) => {
@@ -24,8 +24,9 @@ export function RequestHandlerProvider (Private, es) {
     if (!visParams.multiquerydsl) {
       return display_error('Multy Query DSL is empty');
     }
-    // debugger
-    const context = buildEsQuery(undefined, [query, searchSource.getFields().query], [...filters, ...searchSource.getFields().filter.filter(i => !i.meta.disabled)]);
+
+    const esQueryConfigs = getEsQueryConfig(config);
+    const context = buildEsQuery(undefined, query, filters, esQueryConfigs);
 
     let multiquerydsl = {};
     try {
@@ -39,7 +40,9 @@ export function RequestHandlerProvider (Private, es) {
 
     const bindme = {};
     bindme.context = context;
-    bindme.vis = this.vis;
+    bindme.timefilter = timefilter;
+    bindme.timeRange = timeRange;
+    bindme.visTitle = visTitle;
     bindme.buildEsQuery = buildEsQuery;
     bindme.es = es;
     bindme.response = {};
@@ -117,4 +120,4 @@ export function RequestHandlerProvider (Private, es) {
 
   return myRequestHandler;
 
-};
+}
