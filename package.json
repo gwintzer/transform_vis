@@ -1,6 +1,6 @@
 {
   "name": "transform_vis",
-  "version": "6.4.4",
+  "version": "7.3.0",
   "description": "Transform Visualization",
   "main": "index.js",
   "kibana": {
@@ -32,7 +32,7 @@
     "expect.js": "^0.3.1"
   },
   "dependencies": {
-    "mustache": "2.3.0",
-    "plotly.js": "1.44.1"
+    "mustache": "3.0.2",
+    "plotly.js": "1.49.2"
   }
 }
