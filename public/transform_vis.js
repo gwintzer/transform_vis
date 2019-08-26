@@ -18,7 +18,7 @@ function TransformVisProvider(Private, es, indexPatterns, $sanitize) {
     name: 'transform',
     title: 'Transform',
     description: 'Transfom query results to custom HTML using template language',
-    icon: 'fa-exchange',
+    icon: 'merge',
 //    category: CATEGORY.OTHER,
     visualization: VisController,
     visConfig: {

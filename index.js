@@ -1,3 +1,5 @@
+import { resolve } from 'path';
+
 export default function (kibana) {
 
   return new kibana.Plugin({
@@ -11,7 +13,8 @@ export default function (kibana) {
         return {
           transformVisOptions: options
         };
-      }
+      },
+      styleSheetPaths: resolve(__dirname, 'public/index.scss'),
     },
     config(Joi) {
       return Joi.object({

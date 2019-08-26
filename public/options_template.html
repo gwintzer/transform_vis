@@ -1,4 +1,4 @@
-<div ng-controller="TransformVisEditorController as paramCtrl" style="width: 100%;">
+<div ng-controller="TransformVisEditorController as paramCtrl" style="width: 100%; height: 100%;">
   
     <div class="form-group">
       <label> Index Pattern </label>
@@ -7,22 +7,72 @@
               ng-options="option.id as option.attributes.title for option in indexPatternOptions"></select>
     </div>
   
-    <div class="form-group">
+    <div class="form-group" style = "height: 30%;">
       <label> Query DSL </label>
-      <div ui-ace="{ onLoad: aceLoaded, mode: 'json' }" ng-model="editorState.params.querydsl"
-           class="template-editor form-control ng-pristine ng-untouched ng-valid ng-scope ace_editor ace-tm"/>
+      <div
+        kbn-ui-ace-keyboard-mode
+        ui-ace="{
+          onLoad: aceLoaded,
+          useWrapMode: true,
+          advanced: {
+            highlightActiveLine: false
+          },
+          rendererOptions: {
+            showPrintMargin: false
+          },
+          mode: 'json'
+        }"
+        id="vegaAceEditor1"
+        ng-model="editorState.params.querydsl"
+        data-test-subj="vega-editor"
+        class="vgaEditor__aceEditor"
+      ></div>
     </div>
-    <div ng-if="options.allow_unsafe" class="form-group">
+
+    <div ng-if="options.allow_unsafe" class="form-group" style = "height: 30%;">
       <label> Javascript </label>
-      <div ui-ace="{ onLoad: aceLoaded, mode: 'javascript' }" ng-model="editorState.params.meta"
-           class="template-editor form-control ng-pristine ng-untouched ng-valid ng-scope ace_editor ace-tm"/>
+      <div
+  
+      kbn-ui-ace-keyboard-mode
+      ui-ace="{
+        onLoad: aceLoaded,
+        useWrapMode: true,
+        advanced: {
+          highlightActiveLine: false
+        },
+        rendererOptions: {
+          showPrintMargin: false
+        },
+        mode: 'javascript'
+      }"
+      id="vegaAceEditor2"
+      ng-model="editorState.params.meta"
+      
+      class="vgaEditor__aceEditor"
+    ></div>
     </div>
   
-    <div class="form-group">
+    <div class="form-group" style = "height: 30%;">
       <label> Template </label>
-      <div ui-ace="{ onLoad: aceLoaded, mode: 'html' }" ng-model="editorState.params.formula"
-           class="template-editor form-control ng-pristine ng-untouched ng-valid ng-scope ace_editor ace-tm"/>
-    </div>
+      <div
+    
+      kbn-ui-ace-keyboard-mode
+      ui-ace="{
+        onLoad: aceLoaded,
+        useWrapMode: true,
+        advanced: {
+          highlightActiveLine: false
+        },
+        rendererOptions: {
+          showPrintMargin: false
+        },
+        mode: 'html'
+      }"
+      id="vegaAceEditor3"
+      ng-model="editorState.params.formula"
+      
+      class="vgaEditor__aceEditor"
+    ></div>
   
   </div>
   
