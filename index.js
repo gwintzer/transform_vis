@@ -1,4 +1,5 @@
 import { resolve } from 'path';
+import { existsSync } from 'fs';
 
 export default kibana => new kibana.Plugin({
   id: 'transform_vis',
@@ -9,7 +10,7 @@ export default kibana => new kibana.Plugin({
     visTypes: ['plugins/transform_vis/transform_vis'],
     interpreter: ['plugins/transform_vis/transform_vis_fn'],
     injectDefaultVars: server => ({ transformVisOptions: server.config().get('transform_vis') }),
-    styleSheetPaths: resolve(__dirname, 'public/index.scss'),
+    styleSheetPaths: [resolve(__dirname, 'public/index.scss'), resolve(__dirname, 'public/index.css')].find(p => existsSync(p)),
   },
 
   config: Joi => Joi.object({
