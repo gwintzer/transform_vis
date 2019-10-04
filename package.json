@@ -1,15 +1,15 @@
 {
   "name": "transform_vis",
-  "version": "7.3.0",
+  "version": "7.4.0-1",
   "description": "Transform Visualization",
   "main": "index.js",
   "kibana": {
-    "version": "7.3.0",
+    "version": "7.4.0",
     "templateVersion": "1.0.0"
   },
   "scripts": {
-    "preinstall": "node ../../kibana/preinstall_check",
-    "kbn": "node ../../kibana/scripts/kbn",
+    "preinstall": "node ../../preinstall_check",
+    "kbn": "node ../../scripts/kbn",
     "lint": "eslint .",
     "start": "plugin-helpers start",
     "test:server": "plugin-helpers test:server",
@@ -17,9 +17,9 @@
     "build": "plugin-helpers build"
   },
   "devDependencies": {
-    "@elastic/eslint-config-kibana": "link:../../kibana/packages/eslint-config-kibana",
-    "@elastic/eslint-import-resolver-kibana": "link:../../kibana/packages/kbn-eslint-import-resolver-kibana",
-    "@kbn/plugin-helpers": "link:../../kibana/packages/kbn-plugin-helpers",
+    "@elastic/eslint-config-kibana": "link:../../packages/eslint-config-kibana",
+    "@elastic/eslint-import-resolver-kibana": "link:../../packages/kbn-eslint-import-resolver-kibana",
+    "@kbn/plugin-helpers": "link:../../packages/kbn-plugin-helpers",
     "babel-eslint": "^8.0.2",
     "eslint": "^4.11.0",
     "eslint-plugin-babel": "^4.1.1",
