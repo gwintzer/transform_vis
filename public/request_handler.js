@@ -13,9 +13,6 @@ export const createRequestHandler = function(Private, es, indexPatterns, $saniti
       var { uiState, query, filters, timeRange } = vis;
 
 
-      /* As per https://github.com/elastic/kibana/issues/17722 dashboard_context will go away soon.
-        The proper way to read the dashboard context is to use `filters` and `query` from the above
-        object, however as of 6.4, these variables are coming up undefined */
 
       //const dashboardContext = Private(dashboardContextProvider);
       const options = chrome.getInjected('transformVisOptions');
@@ -52,10 +49,7 @@ export const createRequestHandler = function(Private, es, indexPatterns, $saniti
 
           //const body = JSON.parse(vis.visParams.querydsl.replace('"_DASHBOARD_CONTEXT_"', JSON.stringify(context)));
           const body = JSON.parse(vis.visParams.querydsl.replace('"_DASHBOARD_CONTEXT_"', JSON.stringify(esQueryContext)));
-          // Can be used for testing the above commented future change //
-          // console.log("context", JSON.stringify(context));
           //   console.log("searchSource", searchSource);
-          // console.log("state", state);
            console.log("query", query);
            console.log("filters", filters);
            console.log("body", body);
@@ -68,33 +62,33 @@ export const createRequestHandler = function(Private, es, indexPatterns, $saniti
             if (error) {
               display_error("Error (See Console)");
               console.log("Elasticsearch Query Error", error);
-              return;
-            } else {
+              return
+            }
               const formula = vis.visParams.formula;
-              const bindme = {};
+            const formula = visParams.formula;
+            const bindme = {};
               bindme.context = esQueryContext;
-              bindme.response = response;
-              bindme.error = error;
-              if (options.allow_unsafe) {
-                try {
+            bindme.response = response;
+            bindme.error = error;
+            if (options.allow_unsafe) {
+              try {
                   bindme.meta = eval(vis.visParams.meta);
-                } catch (jserr) {
-                  bindme.jserr = jserr;
-                  display_error("Error (See Console)");
-                  console.log("Javascript Compilation Error", jserr);
-                  return; // Abort!
-                }
-                if (typeof bindme.meta.before_render === "function") { bindme.meta.before_render(); }
+              } catch (jserr) {
+                bindme.jserr = jserr;
+                display_error("Error (See Console)");
+                console.log("Javascript Compilation Error", jserr);
+                return; // Abort!
+              }
+              if (typeof bindme.meta.before_render === "function") { bindme.meta.before_render(); }
                 resolve({
                   html: Mustache.render(formula, bindme),
-                  after_render: bindme.meta.after_render
-                });
+                after_render: bindme.meta.after_render
+              });
 
-              } else {
-                resolve({ html: $sanitize(Mustache.render(formula, bindme)) });
-              }
-
+            } else {
+              resolve({ html: $sanitize(Mustache.render(formula, bindme)) });
             }
+
 
           });
 
@@ -108,7 +102,6 @@ export const createRequestHandler = function(Private, es, indexPatterns, $saniti
 
     };
 
-    return myRequestHandler;
 
   }
 
