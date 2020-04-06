@@ -1,5 +1,5 @@
 node_modules
 build
 .idea
-./deploy.sh
-./yarn-error.log
+/deploy.sh
+/yarn-error.log
