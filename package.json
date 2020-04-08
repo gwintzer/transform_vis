@@ -1,6 +1,6 @@
 {
   "name": "transform_vis",
-  "version": "7.6.1.0",
+  "version": "7.6.1.1",
   "description": "Transform Visualization",
   "main": "index.js",
   "kibana": {
@@ -48,6 +48,7 @@
   "dependencies": {
     "@babel/standalone": "7.9.4",
     "react-shadow": "^16.3.2",
-    "@webcomponents/shadydom": "^1.6.0"
+    "@webcomponents/shadydom": "^1.6.0",
+    "brace": "^0.11.1"
   }
 }
