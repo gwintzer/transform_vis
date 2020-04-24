@@ -96,9 +96,11 @@ export function getTransformRequestHandler({
         const previousContextSource = body.previousContextSource;
         try {
           // @ts-ignore
-          const response = bindme.response;
+          // noinspection ES6ConvertVarToLetConst используется var, чтобы не переименовывался при оптимизиции кода
+          var response = bindme.response;
           // @ts-ignore
-          const meta = bindme.meta;
+          // noinspection ES6ConvertVarToLetConst используется var, чтобы не переименовывался при оптимизиции кода
+          var meta = bindme.meta;
           // eslint-disable-next-line no-eval
           const previousContextValue = eval(babelTransform(previousContextSource) || '');
           fillPrevioudContext(
@@ -130,7 +132,8 @@ export function getTransformRequestHandler({
       if (options.allow_unsafe) {
         try {
           // @ts-ignore
-          const response = bindme.response;
+          // noinspection ES6ConvertVarToLetConst используется var, чтобы не переименовывался при оптимизиции кода
+          var response = bindme.response;
           // eslint-disable-next-line no-eval
           bindme.meta = eval(babelTransform(visParams.meta) || '');
         } catch (jserr) {
