@@ -1,4 +1,5 @@
 import { resolve } from 'path';
+import { existsSync } from "fs";
 import { Legacy } from 'kibana';
 
 import { LegacyPluginApi, LegacyPluginInitializer } from '../../src/legacy/types';
@@ -9,7 +10,7 @@ const transformPluginInitializer: LegacyPluginInitializer = ({ Plugin }: LegacyP
     require: ['elasticsearch'],
     publicDir: resolve(__dirname, 'public'),
     uiExports: {
-      styleSheetPaths: resolve(__dirname, 'public/index.scss'),
+      styleSheetPaths: [resolve(__dirname, 'public/index.scss'), resolve(__dirname, 'public/index.css')].find(p => existsSync(p)),
       hacks: [resolve(__dirname, 'public/legacy')],
       injectDefaultVars: server => ({ transformVisOptions: server.config().get('transform_vis') }),
     },
