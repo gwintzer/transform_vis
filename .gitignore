@@ -1,4 +1,7 @@
 node_modules
 build
+.idea
+/deploy.sh
 *.lock
 ./yarn.lock
+/yarn-error.log
